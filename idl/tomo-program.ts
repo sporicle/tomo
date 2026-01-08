@@ -193,6 +193,23 @@ export type TomoProgram = {
         }
       ],
       "args": []
+    },
+    {
+      "name": "delete",
+      "docs": ["Delete the Tomo account, returning rent to the owner"],
+      "discriminator": [165, 204, 60, 98, 134, 15, 83, 134],
+      "accounts": [
+        {
+          "name": "tomo",
+          "writable": true
+        },
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": []
     }
   ],
   "accounts": [
@@ -426,6 +443,23 @@ export const IDL: TomoProgram = {
           "name": "magicContext",
           "writable": true,
           "address": "MagicContext1111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "delete",
+      "docs": ["Delete the Tomo account, returning rent to the owner"],
+      "discriminator": [165, 204, 60, 98, 134, 15, 83, 134],
+      "accounts": [
+        {
+          "name": "tomo",
+          "writable": true
+        },
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
         }
       ],
       "args": []

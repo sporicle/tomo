@@ -17,6 +17,7 @@ import {
   useFeed,
   useDelegate,
   useUndelegate,
+  useDeleteTomo,
 } from './use-tomo-program'
 
 function formatTimestamp(timestamp: number): string {
@@ -163,6 +164,7 @@ export function DemoFeatureTomo() {
   const feed = useFeed()
   const delegate = useDelegate()
   const undelegate = useUndelegate()
+  const deleteTomo = useDeleteTomo()
 
   const tomo = tomoQuery.data
   const pda = activeUid ? getTomoPDA(activeUid) : null
@@ -173,7 +175,8 @@ export function DemoFeatureTomo() {
     getCoin.isPending ||
     feed.isPending ||
     delegate.isPending ||
-    undelegate.isPending
+    undelegate.isPending ||
+    deleteTomo.isPending
   const coins = tomo?.coins?.toNumber() ?? 0
   const canFeed = coins >= 10
   const isDelegated = tomo?.isDelegated ?? false
@@ -268,6 +271,23 @@ export function DemoFeatureTomo() {
       })
       .catch((err) => {
         console.error('Undelegate error:', err)
+        Snackbar.show({ text: `Error: ${err.message}`, duration: Snackbar.LENGTH_LONG })
+      })
+  }
+
+  const handleDelete = () => {
+    if (!activeUid) return
+    deleteTomo
+      .mutateAsync(activeUid)
+      .then((sig) => {
+        Snackbar.show({
+          text: `Tomo deleted! ${ellipsify(sig, 8)}`,
+          duration: Snackbar.LENGTH_SHORT,
+        })
+        setActiveUid('')
+      })
+      .catch((err) => {
+        console.error('Delete error:', err)
         Snackbar.show({ text: `Error: ${err.message}`, duration: Snackbar.LENGTH_LONG })
       })
   }
@@ -455,6 +475,30 @@ export function DemoFeatureTomo() {
           <Button onPress={() => tomoQuery.refetch()} disabled={isLoading} variant="plain">
             Refresh State
           </Button>
+
+          <View style={{ marginTop: 16 }}>
+            <AppText type="defaultSemiBold" style={{ color: '#F44336' }}>Danger Zone</AppText>
+            <AppText style={{ color: '#666', fontSize: 12 }}>Delete account and recover rent</AppText>
+          </View>
+          <View>
+            {isLoading ? (
+              <ActivityIndicator />
+            ) : (
+              <Button
+                onPress={handleDelete}
+                disabled={isDelegated}
+                variant="filled"
+                color="#F44336"
+              >
+                Delete Tomo
+              </Button>
+            )}
+          </View>
+          {isDelegated && (
+            <AppText style={{ color: '#888', fontSize: 12, textAlign: 'center' }}>
+              Undelegate first to delete
+            </AppText>
+          )}
         </View>
       )}
 
@@ -463,14 +507,16 @@ export function DemoFeatureTomo() {
         getCoin.isError ||
         feed.isError ||
         delegate.isError ||
-        undelegate.isError) && (
+        undelegate.isError ||
+        deleteTomo.isError) && (
         <AppText style={{ color: '#F44336', fontSize: 12, marginTop: 8 }}>
           {initTomo.error?.message ||
             initAndDelegate.error?.message ||
             getCoin.error?.message ||
             feed.error?.message ||
             delegate.error?.message ||
-            undelegate.error?.message}
+            undelegate.error?.message ||
+            deleteTomo.error?.message}
         </AppText>
       )}
     </AppView>

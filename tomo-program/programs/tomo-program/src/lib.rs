@@ -57,6 +57,11 @@ pub mod tomo_program {
         )?;
         Ok(())
     }
+
+    /// Delete the Tomo account, returning rent to the owner
+    pub fn delete(_ctx: Context<Delete>) -> Result<()> {
+        Ok(())
+    }
 }
 
 #[derive(Accounts)]
@@ -105,6 +110,18 @@ pub struct Undelegate<'info> {
     pub payer: Signer<'info>,
     #[account(mut)]
     pub tomo: Account<'info, Tomo>,
+}
+
+#[derive(Accounts)]
+pub struct Delete<'info> {
+    #[account(
+        mut,
+        close = owner,
+        has_one = owner,
+    )]
+    pub tomo: Account<'info, Tomo>,
+    #[account(mut)]
+    pub owner: Signer<'info>,
 }
 
 #[account]

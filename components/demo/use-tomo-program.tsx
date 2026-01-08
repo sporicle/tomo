@@ -6,6 +6,7 @@ import { TomoProgramService, TomoAccount, TomoAccountWithDelegation } from '@/se
 import { useTransaction } from '@/hooks/use-transaction'
 import { useEmbeddedWallet } from '@/hooks/use-embedded-wallet'
 import { useEmbeddedTransaction } from '@/hooks/use-embedded-transaction'
+import { useERTransaction } from '@/hooks/use-er-transaction'
 
 export { TomoAccount, TomoAccountWithDelegation }
 
@@ -219,18 +220,47 @@ export function useDelegate() {
 
 /**
  * Hook to undelegate a Tomo account from the ephemeral rollup back to base layer
- * NOTE: In a full implementation, this transaction should be sent to the EPHEMERAL ROLLUP
- * For simplicity, we're sending to the base layer which will work for testing
+ * The undelegate transaction MUST be sent to the Ephemeral Rollup, not the base layer
  */
 export function useUndelegate() {
-  const { programService, connection, getAccountPublicKey, executeTransaction } = useTomoProgram()
+  const { connection, getAccountPublicKey } = useTomoProgram()
+  const { executeTransaction, erConnection } = useERTransaction()
   const invalidate = useTomoAccountInvalidate()
+
+  // Create program service with ER connection for building the transaction
+  const erProgramService = useMemo(() => {
+    return new TomoProgramService(erConnection)
+  }, [erConnection])
 
   return useMutation({
     mutationKey: ['undelegate-tomo', { endpoint: connection.rpcEndpoint }],
     mutationFn: async (uid: string) => {
       const payer = getAccountPublicKey()
-      const tx = await programService.buildUndelegateTx({ payer, uid })
+      // Build transaction using ER service
+      const tx = await erProgramService.buildUndelegateTx({ payer, uid })
+      // Send to Ephemeral Rollup with main wallet signature
+      const signature = await executeTransaction(tx)
+      return signature
+    },
+    onSuccess: async (_data, uid) => {
+      await invalidate(uid)
+    },
+  })
+}
+
+/**
+ * Hook to delete a Tomo account, returning rent to the owner
+ * Only the account owner can delete the account
+ */
+export function useDeleteTomo() {
+  const { programService, connection, getAccountPublicKey, executeTransaction } = useTomoProgram()
+  const invalidate = useTomoAccountInvalidate()
+
+  return useMutation({
+    mutationKey: ['delete-tomo', { endpoint: connection.rpcEndpoint }],
+    mutationFn: async (uid: string) => {
+      const owner = getAccountPublicKey()
+      const tx = await programService.buildDeleteTx({ owner, uid })
       const signature = await executeTransaction(tx)
       return signature
     },

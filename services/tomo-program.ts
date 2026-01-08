@@ -230,6 +230,31 @@ export class TomoProgramService {
   }
 
   /**
+   * Build delete transaction
+   * This closes the Tomo account and returns rent to the owner
+   */
+  async buildDeleteTx(params: {
+    owner: PublicKey
+    uid: string
+  }): Promise<Transaction> {
+    const [tomoPDA] = this.getTomoPDA(params.uid)
+
+    const instruction = await this.program.methods
+      .delete()
+      .accounts({
+        tomo: tomoPDA,
+        owner: params.owner,
+      })
+      .instruction()
+
+    const tx = new Transaction()
+    tx.add(instruction)
+    tx.feePayer = params.owner
+
+    return tx
+  }
+
+  /**
    * Manually decode Tomo account data
    * Structure: discriminator (8) + owner (32) + uid string (4 + len) + hunger (1) + last_fed (8) + coins (8)
    */
