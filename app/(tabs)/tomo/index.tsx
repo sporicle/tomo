@@ -6,7 +6,7 @@ import { PixelHUD } from '@/components/pixel-hud'
 import { PixelButton } from '@/components/pixel-button'
 import { ellipsify } from '@/utils/ellipsify'
 import React, { useState, useEffect, useCallback } from 'react'
-import { View, Pressable, ActivityIndicator, StyleSheet } from 'react-native'
+import { View, Pressable, ActivityIndicator, StyleSheet, ImageBackground } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useFocusEffect } from 'expo-router'
 import NfcManager, { NfcTech } from 'react-native-nfc-manager'
@@ -20,6 +20,7 @@ import {
 } from '@/components/demo/use-tomo-program'
 
 const EGG_SPRITE = require('@/assets/images/egg.png')
+const BG_IMAGE = require('@/assets/images/bg.jpg')
 
 const EGG_ANIMATIONS = {
   idle: { row: 0, frames: 5, fps: 6, loop: true },
@@ -269,18 +270,18 @@ export default function TabTomoScreen() {
   const lastFedTime = tomo?.lastFed?.toNumber() ?? 0
 
   return (
-    <View style={penguinStyles.container}>
+    <ImageBackground source={BG_IMAGE} style={penguinStyles.container} resizeMode="cover">
       {/* Penguin play area */}
       <InteractivePenguin style={penguinStyles.playArea} onTap={handleGetCoin} />
 
       {/* HUD overlay */}
-      <SafeAreaView style={penguinStyles.hudContainer} pointerEvents="box-none">
+      <View style={penguinStyles.hudContainer} pointerEvents="box-none">
         <PixelHUD
           coins={coins}
           hunger={hunger}
           lastFed={formatLastFedShort(lastFedTime)}
         />
-      </SafeAreaView>
+      </View>
 
       {/* Bottom action bar */}
       <SafeAreaView edges={['bottom']} style={penguinStyles.actionBar}>
@@ -309,7 +310,7 @@ export default function TabTomoScreen() {
           </Pressable>
         </View>
       </SafeAreaView>
-    </View>
+    </ImageBackground>
   )
 }
 
@@ -317,6 +318,7 @@ const penguinStyles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#1a1a2e',
+    overflow: 'visible',
   },
   playArea: {
     flex: 1,
@@ -326,6 +328,7 @@ const penguinStyles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
+    overflow: 'visible',
   },
   actionBar: {
     position: 'absolute',

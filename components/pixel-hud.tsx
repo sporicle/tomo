@@ -225,7 +225,7 @@ const panelStyles = StyleSheet.create({
   outer: {
     backgroundColor: COLORS.panelBorder,
     borderRadius: 4,
-    padding: 3,
+    padding: 5,
   },
   highlight: {
     position: 'absolute',
@@ -286,10 +286,8 @@ export function PixelHUD({ coins, hunger, lastFed }: PixelHUDProps) {
 
 const styles = StyleSheet.create({
   container: {
-    position: 'absolute',
-    top: 8,
-    left: 8,
-    right: 8,
+    marginTop: 8,
+    marginHorizontal: 8,
     flexDirection: 'row',
     justifyContent: 'space-between',
     gap: 8,

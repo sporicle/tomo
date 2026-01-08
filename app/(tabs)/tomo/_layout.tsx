@@ -4,7 +4,13 @@ import React from 'react'
 
 export default function TomoLayout() {
   return (
-    <Stack screenOptions={{ headerTitle: 'Tomo', headerRight: () => <WalletUiDropdown /> }}>
+    <Stack
+      screenOptions={{
+        headerTitle: 'Tomo',
+        headerRight: () => <WalletUiDropdown />,
+        headerTransparent: false,
+      }}
+    >
       <Stack.Screen name="index" />
     </Stack>
   )
