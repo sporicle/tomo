@@ -5,7 +5,11 @@ import React, { useState, useEffect } from 'react'
 import { Button } from '@react-navigation/elements'
 import NfcManager, { NfcTech } from 'react-native-nfc-manager'
 
-export function DemoFeatureNfcReader() {
+interface DemoFeatureNfcReaderProps {
+  onUidRead?: (uid: string) => void
+}
+
+export function DemoFeatureNfcReader({ onUidRead }: DemoFeatureNfcReaderProps) {
   const [uid, setUid] = useState<string | null>(null)
   const [isScanning, setIsScanning] = useState(false)
 
@@ -25,6 +29,7 @@ export function DemoFeatureNfcReader() {
       const tag = await NfcManager.getTag()
       if (tag?.id) {
         setUid(tag.id)
+        onUidRead?.(tag.id)
       }
     } finally {
       NfcManager.cancelTechnologyRequest().catch(() => {})

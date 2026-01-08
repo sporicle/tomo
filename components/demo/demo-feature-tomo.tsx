@@ -148,9 +148,13 @@ function SessionWalletStatus() {
   )
 }
 
-export function DemoFeatureTomo() {
+interface DemoFeatureTomoProps {
+  uid: string
+  setUid: (uid: string) => void
+}
+
+export function DemoFeatureTomo({ uid, setUid }: DemoFeatureTomoProps) {
   const { publicKey } = useTomoProgram()
-  const [uid, setUid] = useState('')
   const [activeUid, setActiveUid] = useState('')
 
   const backgroundColor = useThemeColor({ light: '#f0f0f0', dark: '#333333' }, 'background')
