@@ -32,6 +32,7 @@ anchor deploy              # Deploy to configured cluster
 - Program ID: `GFAFC6FBpbcCVDrZfY2QyCWS3ckkgJuLMtr9KWtubhiM`
 - `Anchor.toml` configures devnet deployment
 - After building, IDL is output to `target/idl/tomo_program.json`
+- **IMPORTANT:** After `anchor build`, copy the IDL to the frontend: `cp tomo-program/target/idl/tomo_program.json idl/tomo-program.json`
 
 ### Frontend Structure
 - `app/` - Expo Router file-based routing
@@ -69,3 +70,4 @@ Pass dynamic values as parameters to `mutateAsync(value)`, not as hook parameter
 2. Invalidate queries after mutations to keep UI in sync
 3. Verify `account` exists before accessing `account.publicKey`
 4. Account structure changes require updating both the Rust program AND `decodeTomoAccount()` in TypeScript
+5. **After modifying the Anchor program, always sync the IDL:** run `anchor build` then copy `tomo-program/target/idl/tomo_program.json` to `idl/tomo-program.json`

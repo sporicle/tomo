@@ -201,6 +201,37 @@
       ]
     },
     {
+      "name": "delete",
+      "docs": [
+        "Delete the Tomo account, returning rent to the owner"
+      ],
+      "discriminator": [
+        165,
+        204,
+        60,
+        98,
+        134,
+        15,
+        83,
+        134
+      ],
+      "accounts": [
+        {
+          "name": "tomo",
+          "writable": true
+        },
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "tomo"
+          ]
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "feed",
       "discriminator": [
         46,
