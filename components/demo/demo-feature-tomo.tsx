@@ -6,6 +6,7 @@ import { Button } from '@react-navigation/elements'
 import { useThemeColor } from '@/hooks/use-theme-color'
 import Snackbar from 'react-native-snackbar'
 import { ellipsify } from '@/utils/ellipsify'
+import { useEmbeddedWallet } from '@/hooks/use-embedded-wallet'
 import {
   getTomoPDA,
   useTomoProgram,
@@ -13,6 +14,8 @@ import {
   useInitTomo,
   useGetCoin,
   useFeed,
+  useDelegate,
+  useUndelegate,
 } from './use-tomo-program'
 
 function formatTimestamp(timestamp: number): string {
@@ -61,6 +64,88 @@ function HungerBar({ hunger }: { hunger: number }) {
   )
 }
 
+function DelegationStatus({ isDelegated }: { isDelegated: boolean }) {
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+        borderRadius: 8,
+        backgroundColor: isDelegated ? '#E3F2FD' : '#FFF3E0',
+      }}
+    >
+      <View
+        style={{
+          width: 8,
+          height: 8,
+          borderRadius: 4,
+          backgroundColor: isDelegated ? '#2196F3' : '#FF9800',
+        }}
+      />
+      <AppText style={{ color: isDelegated ? '#1565C0' : '#E65100', fontWeight: '600' }}>
+        {isDelegated ? 'Delegated to Ephemeral Rollup' : 'On Base Layer (Solana)'}
+      </AppText>
+    </View>
+  )
+}
+
+function SessionWalletStatus() {
+  const { publicKey, hasWallet, isLoading } = useEmbeddedWallet()
+
+  if (isLoading) {
+    return (
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 8,
+          paddingVertical: 8,
+          paddingHorizontal: 12,
+          borderRadius: 8,
+          backgroundColor: '#F5F5F5',
+        }}
+      >
+        <ActivityIndicator size="small" />
+        <AppText style={{ color: '#666' }}>Loading session wallet...</AppText>
+      </View>
+    )
+  }
+
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+        borderRadius: 8,
+        backgroundColor: hasWallet ? '#E8F5E9' : '#FFEBEE',
+      }}
+    >
+      <View
+        style={{
+          width: 8,
+          height: 8,
+          borderRadius: 4,
+          backgroundColor: hasWallet ? '#4CAF50' : '#F44336',
+        }}
+      />
+      <View style={{ flex: 1 }}>
+        <AppText style={{ color: hasWallet ? '#2E7D32' : '#C62828', fontWeight: '600' }}>
+          {hasWallet ? 'Session Wallet Active' : 'No Session Wallet'}
+        </AppText>
+        {hasWallet && publicKey && (
+          <AppText style={{ color: '#666', fontSize: 12 }}>{ellipsify(publicKey.toString(), 8)}</AppText>
+        )}
+      </View>
+    </View>
+  )
+}
+
 export function DemoFeatureTomo() {
   const { publicKey } = useTomoProgram()
   const [uid, setUid] = useState('')
@@ -74,13 +159,21 @@ export function DemoFeatureTomo() {
   const initTomo = useInitTomo()
   const getCoin = useGetCoin()
   const feed = useFeed()
+  const delegate = useDelegate()
+  const undelegate = useUndelegate()
 
   const tomo = tomoQuery.data
   const pda = activeUid ? getTomoPDA(activeUid) : null
 
-  const isLoading = initTomo.isPending || getCoin.isPending || feed.isPending
+  const isLoading =
+    initTomo.isPending ||
+    getCoin.isPending ||
+    feed.isPending ||
+    delegate.isPending ||
+    undelegate.isPending
   const coins = tomo?.coins?.toNumber() ?? 0
   const canFeed = coins >= 10
+  const isDelegated = tomo?.isDelegated ?? false
 
   const handleInit = () => {
     const uidValue = uid.trim()
@@ -122,6 +215,38 @@ export function DemoFeatureTomo() {
       })
       .catch((err) => {
         console.error('Feed error:', err)
+        Snackbar.show({ text: `Error: ${err.message}`, duration: Snackbar.LENGTH_LONG })
+      })
+  }
+
+  const handleDelegate = () => {
+    if (!activeUid) return
+    delegate
+      .mutateAsync(activeUid)
+      .then((sig) => {
+        Snackbar.show({
+          text: `Delegated to Ephemeral Rollup! ${ellipsify(sig, 8)}`,
+          duration: Snackbar.LENGTH_SHORT,
+        })
+      })
+      .catch((err) => {
+        console.error('Delegate error:', err)
+        Snackbar.show({ text: `Error: ${err.message}`, duration: Snackbar.LENGTH_LONG })
+      })
+  }
+
+  const handleUndelegate = () => {
+    if (!activeUid) return
+    undelegate
+      .mutateAsync(activeUid)
+      .then((sig) => {
+        Snackbar.show({
+          text: `Undelegated to Base Layer! ${ellipsify(sig, 8)}`,
+          duration: Snackbar.LENGTH_SHORT,
+        })
+      })
+      .catch((err) => {
+        console.error('Undelegate error:', err)
         Snackbar.show({ text: `Error: ${err.message}`, duration: Snackbar.LENGTH_LONG })
       })
   }
@@ -201,6 +326,9 @@ export function DemoFeatureTomo() {
         >
           <AppText type="defaultSemiBold">Tomo State</AppText>
 
+          <DelegationStatus isDelegated={isDelegated} />
+          <SessionWalletStatus />
+
           <View style={{ gap: 8 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
               <AppText style={{ color: '#888' }}>PDA:</AppText>
@@ -252,7 +380,10 @@ export function DemoFeatureTomo() {
 
       {tomo && (
         <View style={{ gap: 8, marginTop: 16 }}>
-          <AppText type="defaultSemiBold">Actions</AppText>
+          <View>
+            <AppText type="defaultSemiBold">Actions</AppText>
+            <AppText style={{ color: '#666', fontSize: 12 }}>Uses session wallet (no signature needed)</AppText>
+          </View>
           <View style={{ flexDirection: 'row', gap: 8 }}>
             {isLoading ? (
               <ActivityIndicator style={{ flex: 1 }} />
@@ -271,15 +402,47 @@ export function DemoFeatureTomo() {
               </>
             )}
           </View>
+
+          <View style={{ marginTop: 8 }}>
+            <AppText type="defaultSemiBold">Delegation</AppText>
+            <AppText style={{ color: '#666', fontSize: 12 }}>Requires wallet signature</AppText>
+          </View>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            {isLoading ? (
+              <ActivityIndicator style={{ flex: 1 }} />
+            ) : (
+              <>
+                <View style={{ flex: 1 }}>
+                  <Button onPress={handleDelegate} disabled={isDelegated} variant="tinted">
+                    Delegate
+                  </Button>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Button onPress={handleUndelegate} disabled={!isDelegated} variant="filled">
+                    Undelegate
+                  </Button>
+                </View>
+              </>
+            )}
+          </View>
+
           <Button onPress={() => tomoQuery.refetch()} disabled={isLoading} variant="plain">
             Refresh State
           </Button>
         </View>
       )}
 
-      {(initTomo.isError || getCoin.isError || feed.isError) && (
+      {(initTomo.isError ||
+        getCoin.isError ||
+        feed.isError ||
+        delegate.isError ||
+        undelegate.isError) && (
         <AppText style={{ color: '#F44336', fontSize: 12, marginTop: 8 }}>
-          {initTomo.error?.message || getCoin.error?.message || feed.error?.message}
+          {initTomo.error?.message ||
+            getCoin.error?.message ||
+            feed.error?.message ||
+            delegate.error?.message ||
+            undelegate.error?.message}
         </AppText>
       )}
     </AppView>

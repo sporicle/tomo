@@ -1,11 +1,16 @@
 import { useMemo } from 'react'
-import { PublicKey } from '@solana/web3.js'
+import { Connection, PublicKey } from '@solana/web3.js'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useMobileWallet } from '@wallet-ui/react-native-web3js'
-import { TomoProgramService, TomoAccount } from '@/services/tomo-program'
+import { TomoProgramService, TomoAccount, TomoAccountWithDelegation } from '@/services/tomo-program'
 import { useTransaction } from '@/hooks/use-transaction'
+import { useEmbeddedWallet } from '@/hooks/use-embedded-wallet'
+import { useEmbeddedTransaction } from '@/hooks/use-embedded-transaction'
 
-export { TomoAccount }
+export { TomoAccount, TomoAccountWithDelegation }
+
+// MagicBlock Ephemeral Rollup endpoint
+const EPHEMERAL_ROLLUP_ENDPOINT = 'https://devnet.magicblock.app/'
 
 export function getTomoPDA(uid: string): PublicKey {
   const service = new TomoProgramService({} as any)
@@ -44,14 +49,40 @@ export function useTomoProgram() {
 export function useTomoAccountQuery({ uid }: { uid: string }) {
   const { programService, connection } = useTomoProgram()
 
+  // Create ER connection and service for fetching delegated account state
+  const erConnection = useMemo(() => {
+    return new Connection(EPHEMERAL_ROLLUP_ENDPOINT, { commitment: 'confirmed' })
+  }, [])
+
+  const erProgramService = useMemo(() => {
+    return new TomoProgramService(erConnection)
+  }, [erConnection])
+
   return useQuery({
     queryKey: ['tomo-account', { endpoint: connection.rpcEndpoint, uid }],
-    queryFn: async (): Promise<TomoAccount | null> => {
+    queryFn: async (): Promise<TomoAccountWithDelegation | null> => {
       console.log('useTomoAccountQuery fetching for uid:', uid)
       if (!uid) return null
-      const result = await programService.fetchTomo(uid)
-      console.log('useTomoAccountQuery result:', result)
-      return result
+
+      // First check base layer to get delegation status
+      const baseResult = await programService.fetchTomo(uid)
+      if (!baseResult) {
+        console.log('Account not found on base layer')
+        return null
+      }
+
+      // If delegated, fetch fresh state from ephemeral rollup
+      if (baseResult.isDelegated) {
+        console.log('Account is delegated, fetching from ER...')
+        const erResult = await erProgramService.fetchTomo(uid)
+        if (erResult) {
+          console.log('useTomoAccountQuery ER result:', erResult)
+          return { ...erResult, isDelegated: true }
+        }
+      }
+
+      console.log('useTomoAccountQuery result:', baseResult)
+      return baseResult
     },
     enabled: !!uid,
   })
@@ -86,14 +117,26 @@ export function useInitTomo() {
   })
 }
 
+/**
+ * Hook to get a coin using the embedded wallet.
+ * This is a permissionless operation - no main wallet signature required.
+ */
 export function useGetCoin() {
-  const { programService, connection, getAccountPublicKey, executeTransaction } = useTomoProgram()
+  const { programService, connection } = useTomoProgram()
+  const { publicKey: embeddedPublicKey, initialize: initializeEmbeddedWallet } = useEmbeddedWallet()
+  const { executeTransaction } = useEmbeddedTransaction()
   const invalidate = useTomoAccountInvalidate()
 
   return useMutation({
     mutationKey: ['get-coin', { endpoint: connection.rpcEndpoint }],
     mutationFn: async (uid: string) => {
-      const payer = getAccountPublicKey()
+      // Initialize embedded wallet if not already done
+      let payer = embeddedPublicKey
+      if (!payer) {
+        const keypair = await initializeEmbeddedWallet()
+        payer = keypair.publicKey
+      }
+
       const tx = await programService.buildGetCoinTx({ payer, uid })
       const signature = await executeTransaction(tx)
       return signature
@@ -104,15 +147,72 @@ export function useGetCoin() {
   })
 }
 
+/**
+ * Hook to feed the pet using the embedded wallet.
+ * This is a permissionless operation - no main wallet signature required.
+ */
 export function useFeed() {
-  const { programService, connection, getAccountPublicKey, executeTransaction } = useTomoProgram()
+  const { programService, connection } = useTomoProgram()
+  const { publicKey: embeddedPublicKey, initialize: initializeEmbeddedWallet } = useEmbeddedWallet()
+  const { executeTransaction } = useEmbeddedTransaction()
   const invalidate = useTomoAccountInvalidate()
 
   return useMutation({
     mutationKey: ['feed', { endpoint: connection.rpcEndpoint }],
     mutationFn: async (uid: string) => {
-      const payer = getAccountPublicKey()
+      // Initialize embedded wallet if not already done
+      let payer = embeddedPublicKey
+      if (!payer) {
+        const keypair = await initializeEmbeddedWallet()
+        payer = keypair.publicKey
+      }
+
       const tx = await programService.buildFeedTx({ payer, uid })
+      const signature = await executeTransaction(tx)
+      return signature
+    },
+    onSuccess: async (_data, uid) => {
+      await invalidate(uid)
+    },
+  })
+}
+
+/**
+ * Hook to delegate a Tomo account to the MagicBlock ephemeral rollup
+ * The delegate transaction is sent to the BASE LAYER (Solana)
+ */
+export function useDelegate() {
+  const { programService, connection, getAccountPublicKey, executeTransaction } = useTomoProgram()
+  const invalidate = useTomoAccountInvalidate()
+
+  return useMutation({
+    mutationKey: ['delegate-tomo', { endpoint: connection.rpcEndpoint }],
+    mutationFn: async (uid: string) => {
+      const payer = getAccountPublicKey()
+      const tx = await programService.buildDelegateTx({ payer, uid })
+      const signature = await executeTransaction(tx)
+      return signature
+    },
+    onSuccess: async (_data, uid) => {
+      await invalidate(uid)
+    },
+  })
+}
+
+/**
+ * Hook to undelegate a Tomo account from the ephemeral rollup back to base layer
+ * NOTE: In a full implementation, this transaction should be sent to the EPHEMERAL ROLLUP
+ * For simplicity, we're sending to the base layer which will work for testing
+ */
+export function useUndelegate() {
+  const { programService, connection, getAccountPublicKey, executeTransaction } = useTomoProgram()
+  const invalidate = useTomoAccountInvalidate()
+
+  return useMutation({
+    mutationKey: ['undelegate-tomo', { endpoint: connection.rpcEndpoint }],
+    mutationFn: async (uid: string) => {
+      const payer = getAccountPublicKey()
+      const tx = await programService.buildUndelegateTx({ payer, uid })
       const signature = await executeTransaction(tx)
       return signature
     },

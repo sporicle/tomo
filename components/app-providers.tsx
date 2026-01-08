@@ -3,6 +3,7 @@ import { MobileWalletProvider } from '@wallet-ui/react-native-web3js'
 import { PropsWithChildren } from 'react'
 import { AuthProvider } from '@/components/auth/auth-provider'
 import { ClusterProvider, useCluster } from '@/components/cluster/cluster-provider'
+import { EmbeddedWalletProvider } from '@/components/embedded-wallet/embedded-wallet-provider'
 import { AppTheme } from '@/components/app-theme'
 
 const queryClient = new QueryClient()
@@ -12,7 +13,9 @@ export function AppProviders({ children }: PropsWithChildren) {
       <QueryClientProvider client={queryClient}>
         <ClusterProvider>
           <SolanaProvider>
-            <AuthProvider>{children}</AuthProvider>
+            <EmbeddedWalletProvider>
+              <AuthProvider>{children}</AuthProvider>
+            </EmbeddedWalletProvider>
           </SolanaProvider>
         </ClusterProvider>
       </QueryClientProvider>

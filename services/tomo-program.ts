@@ -4,6 +4,9 @@ import { TomoProgram, IDL } from '@/idl'
 import { AppConfig } from '@/constants/app-config'
 
 const PROGRAM_ID = new PublicKey(AppConfig.tomoProgramId)
+const DELEGATION_PROGRAM_ID = new PublicKey('DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh')
+const MAGIC_PROGRAM_ID = new PublicKey('Magic11111111111111111111111111111111111111')
+const MAGIC_CONTEXT_ID = new PublicKey('MagicContext1111111111111111111111111111111')
 
 export interface TomoAccount {
   owner: PublicKey
@@ -11,6 +14,10 @@ export interface TomoAccount {
   hunger: number
   lastFed: BN
   coins: BN
+}
+
+export interface TomoAccountWithDelegation extends TomoAccount {
+  isDelegated: boolean
 }
 
 export class TomoProgramService {
@@ -41,6 +48,36 @@ export class TomoProgramService {
     return PublicKey.findProgramAddressSync(
       [Buffer.from('tomo'), Buffer.from(uid)],
       PROGRAM_ID
+    )
+  }
+
+  /**
+   * Derive delegation buffer PDA
+   */
+  getDelegationBufferPDA(tomoPDA: PublicKey): [PublicKey, number] {
+    return PublicKey.findProgramAddressSync(
+      [Buffer.from('buffer'), tomoPDA.toBuffer()],
+      PROGRAM_ID
+    )
+  }
+
+  /**
+   * Derive delegation record PDA
+   */
+  getDelegationRecordPDA(tomoPDA: PublicKey): [PublicKey, number] {
+    return PublicKey.findProgramAddressSync(
+      [Buffer.from('delegation'), tomoPDA.toBuffer()],
+      DELEGATION_PROGRAM_ID
+    )
+  }
+
+  /**
+   * Derive delegation metadata PDA
+   */
+  getDelegationMetadataPDA(tomoPDA: PublicKey): [PublicKey, number] {
+    return PublicKey.findProgramAddressSync(
+      [Buffer.from('delegation-metadata'), tomoPDA.toBuffer()],
+      DELEGATION_PROGRAM_ID
     )
   }
 
@@ -113,6 +150,56 @@ export class TomoProgramService {
   }
 
   /**
+   * Build delegate transaction
+   * This delegates the Tomo account to the MagicBlock ephemeral rollup
+   */
+  async buildDelegateTx(params: {
+    payer: PublicKey
+    uid: string
+  }): Promise<Transaction> {
+    const instruction = await this.program.methods
+      .delegate(params.uid)
+      .accounts({
+        payer: params.payer,
+      })
+      .instruction()
+
+    const tx = new Transaction()
+    tx.add(instruction)
+    tx.feePayer = params.payer
+
+    return tx
+  }
+
+  /**
+   * Build undelegate transaction
+   * This undelegates the Tomo account from the ephemeral rollup back to base layer
+   * NOTE: This transaction should be sent to the EPHEMERAL ROLLUP, not the base layer
+   */
+  async buildUndelegateTx(params: {
+    payer: PublicKey
+    uid: string
+  }): Promise<Transaction> {
+    const [tomoPDA] = this.getTomoPDA(params.uid)
+
+    const instruction = await this.program.methods
+      .undelegate()
+      .accounts({
+        payer: params.payer,
+        tomo: tomoPDA,
+        magicProgram: MAGIC_PROGRAM_ID,
+        magicContext: MAGIC_CONTEXT_ID,
+      })
+      .instruction()
+
+    const tx = new Transaction()
+    tx.add(instruction)
+    tx.feePayer = params.payer
+
+    return tx
+  }
+
+  /**
    * Manually decode Tomo account data
    * Structure: discriminator (8) + owner (32) + uid string (4 + len) + hunger (1) + last_fed (8) + coins (8)
    */
@@ -158,9 +245,18 @@ export class TomoProgramService {
   }
 
   /**
-   * Fetch Tomo account from blockchain
+   * Check if an account is delegated by checking its owner
+   * When delegated, the account owner is DELEGATION_PROGRAM_ID
+   * When not delegated, the account owner is PROGRAM_ID
    */
-  async fetchTomo(uid: string): Promise<TomoAccount | null> {
+  checkIsDelegated(accountOwner: PublicKey): boolean {
+    return accountOwner.equals(DELEGATION_PROGRAM_ID)
+  }
+
+  /**
+   * Fetch Tomo account from blockchain with delegation status
+   */
+  async fetchTomo(uid: string): Promise<TomoAccountWithDelegation | null> {
     try {
       const [tomoPDA] = this.getTomoPDA(uid)
       console.log('Fetching Tomo account:', { uid, pda: tomoPDA.toString() })
@@ -172,11 +268,17 @@ export class TomoProgramService {
         return null
       }
 
+      // Check delegation status based on account owner
+      const isDelegated = this.checkIsDelegated(accountInfo.owner)
+
       // Manually decode to work around Buffer polyfill issues in React Native
       const decoded = this.decodeTomoAccount(accountInfo.data)
 
-      console.log('Fetched account:', decoded)
-      return decoded
+      console.log('Fetched account:', { ...decoded, isDelegated })
+      return {
+        ...decoded,
+        isDelegated,
+      }
     } catch (error) {
       console.error('Error fetching Tomo:', error)
       // Account doesn't exist or other error
@@ -185,15 +287,20 @@ export class TomoProgramService {
   }
 
   /**
-   * Fetch Tomo account by PDA
+   * Fetch Tomo account by PDA with delegation status
    */
-  async fetchTomoByPDA(pda: PublicKey): Promise<TomoAccount | null> {
+  async fetchTomoByPDA(pda: PublicKey): Promise<TomoAccountWithDelegation | null> {
     try {
       const accountInfo = await this.connection.getAccountInfo(pda)
       if (!accountInfo) {
         return null
       }
-      return this.decodeTomoAccount(accountInfo.data)
+      const isDelegated = this.checkIsDelegated(accountInfo.owner)
+      const decoded = this.decodeTomoAccount(accountInfo.data)
+      return {
+        ...decoded,
+        isDelegated,
+      }
     } catch (error) {
       return null
     }
