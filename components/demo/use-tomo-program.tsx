@@ -6,7 +6,6 @@ import { TomoProgramService, TomoAccount, TomoAccountWithDelegation } from '@/se
 import { useTransaction } from '@/hooks/use-transaction'
 import { useEmbeddedWallet } from '@/hooks/use-embedded-wallet'
 import { useEmbeddedTransaction } from '@/hooks/use-embedded-transaction'
-import { useERTransaction } from '@/hooks/use-er-transaction'
 
 export { TomoAccount, TomoAccountWithDelegation }
 
@@ -221,10 +220,12 @@ export function useDelegate() {
 /**
  * Hook to undelegate a Tomo account from the ephemeral rollup back to base layer
  * The undelegate transaction MUST be sent to the Ephemeral Rollup, not the base layer
+ * Uses the embedded wallet as payer to avoid MWA chain validation issues with ER blockhashes
  */
 export function useUndelegate() {
-  const { connection, getAccountPublicKey } = useTomoProgram()
-  const { executeTransaction, erConnection } = useERTransaction()
+  const { connection } = useTomoProgram()
+  const { keypair } = useEmbeddedWallet()
+  const { executeTransaction, erConnection } = useEmbeddedTransaction()
   const invalidate = useTomoAccountInvalidate()
 
   // Create program service with ER connection for building the transaction
@@ -235,10 +236,14 @@ export function useUndelegate() {
   return useMutation({
     mutationKey: ['undelegate-tomo', { endpoint: connection.rpcEndpoint }],
     mutationFn: async (uid: string) => {
-      const payer = getAccountPublicKey()
+      if (!keypair) {
+        throw new Error('Embedded wallet not initialized')
+      }
+      // Use embedded wallet as payer - avoids MWA chain validation issues
+      const payer = keypair.publicKey
       // Build transaction using ER service
       const tx = await erProgramService.buildUndelegateTx({ payer, uid })
-      // Send to Ephemeral Rollup with main wallet signature
+      // Send to Ephemeral Rollup with embedded wallet signature
       const signature = await executeTransaction(tx)
       return signature
     },
