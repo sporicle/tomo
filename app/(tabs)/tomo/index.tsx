@@ -152,15 +152,13 @@ export default function TabTomoScreen() {
     Snackbar.show({ text: 'Hatched!', duration: Snackbar.LENGTH_SHORT })
   }, [])
 
-  const handleGetCoin = async () => {
+  const handleGetCoin = () => {
     if (!scannedUid) return
-    try {
-      const sig = await getCoin.mutateAsync(scannedUid)
-      Snackbar.show({ text: `Got a coin! ${ellipsify(sig, 8)}`, duration: Snackbar.LENGTH_SHORT })
-    } catch (err: any) {
+    // Fire and forget - don't block on the transaction
+    getCoin.mutateAsync(scannedUid).catch((err: any) => {
       console.error('Get coin error:', err)
       Snackbar.show({ text: `Error: ${err.message}`, duration: Snackbar.LENGTH_LONG })
-    }
+    })
   }
 
   const handleFeed = async () => {
@@ -273,7 +271,7 @@ export default function TabTomoScreen() {
   return (
     <View style={penguinStyles.container}>
       {/* Penguin play area */}
-      <InteractivePenguin style={penguinStyles.playArea} />
+      <InteractivePenguin style={penguinStyles.playArea} onTap={handleGetCoin} />
 
       {/* HUD overlay */}
       <SafeAreaView style={penguinStyles.hudContainer} pointerEvents="box-none">

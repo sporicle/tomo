@@ -85,7 +85,11 @@ export function AnimatedSprite({
           {
             width: frameSize,
             height: frameSize,
-            transform: [{ scale }, { scaleX: flipHorizontal ? -1 : 1 }],
+            transform: [
+              { scale },
+              { scaleX: flipHorizontal ? -1 : 1 },
+              { translateX: flipHorizontal ? -frameSize : 0 },
+            ],
           },
         ]}
       >

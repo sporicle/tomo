@@ -1,13 +1,27 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react'
-import { View, StyleSheet, LayoutChangeEvent, PanResponder, GestureResponderEvent } from 'react-native'
+import * as Haptics from 'expo-haptics'
+import {
+  View,
+  StyleSheet,
+  LayoutChangeEvent,
+  PanResponder,
+  GestureResponderEvent,
+  Image,
+  Pressable,
+} from 'react-native'
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   useFrameCallback,
+  withTiming,
+  withSequence,
+  runOnJS,
+  Easing,
 } from 'react-native-reanimated'
 import { AnimatedSprite } from './animated-sprite'
 
 const PENGUIN_SPRITE = require('@/assets/images/penguin.png')
+const COIN_SPRITE = require('@/assets/images/coin.png')
 
 const PENGUIN_ANIMATIONS = {
   idle: { row: 0, frames: 16, fps: 4, loop: true },
@@ -20,14 +34,94 @@ const PENGUIN_DISPLAY_SIZE = SPRITE_SIZE * PENGUIN_SCALE
 const FOLLOW_DISTANCE = 50 // Stop this far from finger
 const MOVE_SPEED = 150 // pixels per second
 
-interface InteractivePenguinProps {
-  style?: object
+// Coin animation constants
+const COIN_SIZE = 64
+const COIN_FRAMES = 10
+const COIN_SCALE = 0.5
+const COIN_DISPLAY_SIZE = COIN_SIZE * COIN_SCALE
+
+// Debug mode - set to true to show hitboxes
+const DEBUG_HITBOXES = false
+const PRESSABLE_HITSLOP = 10
+const MIN_DRAG_THRESHOLD = 30 // Must move this many pixels before drag starts
+
+interface SpinningCoinProps {
+  startX: number
+  startY: number
+  onComplete: () => void
 }
 
-export function InteractivePenguin({ style }: InteractivePenguinProps) {
+function SpinningCoin({ startX, startY, onComplete }: SpinningCoinProps) {
+  const translateY = useSharedValue(0)
+  const opacity = useSharedValue(1)
+  const [frame, setFrame] = useState(0)
+
+  useEffect(() => {
+    // Animate coin rising and fading
+    translateY.value = withTiming(-20, {
+      duration: 500,
+      easing: Easing.out(Easing.cubic),
+    })
+    opacity.value = withSequence(
+      withTiming(1, { duration: 300 }),
+      withTiming(0, { duration: 300 }, (finished) => {
+        if (finished) {
+          runOnJS(onComplete)()
+        }
+      })
+    )
+
+    // Spin through frames
+    const frameInterval = setInterval(() => {
+      setFrame((f) => (f + 1) % COIN_FRAMES)
+    }, 50)
+
+    return () => clearInterval(frameInterval)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value }],
+    opacity: opacity.value,
+  }))
+
+  return (
+    <Animated.View
+      style={[
+        {
+          position: 'absolute',
+          left: startX - COIN_DISPLAY_SIZE / 2,
+          top: startY - COIN_DISPLAY_SIZE,
+          width: COIN_DISPLAY_SIZE,
+          height: COIN_DISPLAY_SIZE,
+          overflow: 'hidden',
+        },
+        animatedStyle,
+      ]}
+    >
+      <Image
+        source={COIN_SPRITE}
+        style={{
+          width: COIN_SIZE * COIN_FRAMES * COIN_SCALE,
+          height: COIN_DISPLAY_SIZE,
+          marginLeft: -frame * COIN_DISPLAY_SIZE,
+        }}
+      />
+    </Animated.View>
+  )
+}
+
+interface InteractivePenguinProps {
+  style?: object
+  onTap?: () => void
+}
+
+export function InteractivePenguin({ style, onTap }: InteractivePenguinProps) {
   const [isMoving, setIsMoving] = useState(false)
   const [facingLeft, setFacingLeft] = useState(false)
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 })
+  const [coins, setCoins] = useState<{ id: number; x: number; y: number }[]>([])
+  const coinIdRef = useRef(0)
 
   // Penguin position (top-left of sprite)
   const positionX = useSharedValue(0)
@@ -43,6 +137,26 @@ export function InteractivePenguin({ style }: InteractivePenguinProps) {
   containerSizeRef.current = containerSize
   const isMovingRef = useRef(false)
   const lastFrameTime = useSharedValue(0)
+
+  // Drag threshold tracking
+  const hasDragStarted = useRef(false)
+
+  const spawnCoin = useCallback(() => {
+    const penguinCenterX = positionX.value + PENGUIN_DISPLAY_SIZE / 2
+    const penguinTopY = positionY.value
+    const id = coinIdRef.current++
+    setCoins((prev) => [...prev, { id, x: penguinCenterX, y: penguinTopY }])
+  }, [positionX, positionY])
+
+  const removeCoin = useCallback((id: number) => {
+    setCoins((prev) => prev.filter((c) => c.id !== id))
+  }, [])
+
+  const handlePenguinTap = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    spawnCoin()
+    onTap?.()
+  }, [spawnCoin, onTap])
 
   // Frame callback for consistent speed movement
   useFrameCallback((frameInfo) => {
@@ -98,44 +212,19 @@ export function InteractivePenguin({ style }: InteractivePenguinProps) {
   const panResponder = useMemo(
     () =>
       PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: () => true,
+        // Never capture initial touch - let Pressable have first chance
+        onStartShouldSetPanResponder: () => false,
 
-        onPanResponderGrant: (event: GestureResponderEvent) => {
-          const { locationX, locationY } = event.nativeEvent
-          const size = containerSizeRef.current
-          if (size.width === 0) return
+        // Only capture if movement exceeds threshold
+        onMoveShouldSetPanResponder: (event: GestureResponderEvent, gestureState) => {
+          const { dx, dy } = gestureState
+          const dragDistance = Math.sqrt(dx * dx + dy * dy)
+          return dragDistance >= MIN_DRAG_THRESHOLD
+        },
 
-          // Calculate distance from penguin center to touch
-          const penguinCenterX = positionX.value + PENGUIN_DISPLAY_SIZE / 2
-          const penguinCenterY = positionY.value + PENGUIN_DISPLAY_SIZE / 2
-          const dx = locationX - penguinCenterX
-          const dy = locationY - penguinCenterY
-          const distance = Math.sqrt(dx * dx + dy * dy)
-
-          // Face toward the touch position
-          if (Math.abs(dx) > 5) {
-            setFacingLeft(dx < 0)
-          }
-
-          if (distance > FOLLOW_DISTANCE) {
-            // Calculate target position: stop FOLLOW_DISTANCE away from finger
-            const angle = Math.atan2(dy, dx)
-            const targetCenterX = locationX - Math.cos(angle) * FOLLOW_DISTANCE
-            const targetCenterY = locationY - Math.sin(angle) * FOLLOW_DISTANCE
-
-            // Convert center to top-left and clamp to bounds
-            targetX.value = Math.max(
-              0,
-              Math.min(targetCenterX - PENGUIN_DISPLAY_SIZE / 2, size.width - PENGUIN_DISPLAY_SIZE)
-            )
-            targetY.value = Math.max(
-              0,
-              Math.min(targetCenterY - PENGUIN_DISPLAY_SIZE / 2, size.height - PENGUIN_DISPLAY_SIZE)
-            )
-
-            setMovingState(true)
-          }
+        onPanResponderGrant: () => {
+          // Drag threshold was exceeded, so we're now dragging
+          hasDragStarted.current = true
         },
 
         onPanResponderMove: (event: GestureResponderEvent) => {
@@ -143,7 +232,6 @@ export function InteractivePenguin({ style }: InteractivePenguinProps) {
           const size = containerSizeRef.current
           if (size.width === 0) return
 
-          // Calculate distance from penguin center to touch
           const penguinCenterX = positionX.value + PENGUIN_DISPLAY_SIZE / 2
           const penguinCenterY = positionY.value + PENGUIN_DISPLAY_SIZE / 2
           const dx = locationX - penguinCenterX
@@ -160,12 +248,10 @@ export function InteractivePenguin({ style }: InteractivePenguinProps) {
               setMovingState(true)
             }
 
-            // Calculate target position: stop FOLLOW_DISTANCE away from finger
             const angle = Math.atan2(dy, dx)
             const targetCenterX = locationX - Math.cos(angle) * FOLLOW_DISTANCE
             const targetCenterY = locationY - Math.sin(angle) * FOLLOW_DISTANCE
 
-            // Convert center to top-left and clamp to bounds
             targetX.value = Math.max(
               0,
               Math.min(targetCenterX - PENGUIN_DISPLAY_SIZE / 2, size.width - PENGUIN_DISPLAY_SIZE)
@@ -175,7 +261,6 @@ export function InteractivePenguin({ style }: InteractivePenguinProps) {
               Math.min(targetCenterY - PENGUIN_DISPLAY_SIZE / 2, size.height - PENGUIN_DISPLAY_SIZE)
             )
           } else {
-            // Within follow distance, stop
             if (isMovingRef.current) {
               setMovingState(false)
             }
@@ -184,10 +269,12 @@ export function InteractivePenguin({ style }: InteractivePenguinProps) {
 
         onPanResponderRelease: () => {
           setMovingState(false)
+          hasDragStarted.current = false
         },
 
         onPanResponderTerminate: () => {
           setMovingState(false)
+          hasDragStarted.current = false
         },
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -204,14 +291,63 @@ export function InteractivePenguin({ style }: InteractivePenguinProps) {
   return (
     <View style={[styles.container, style]} onLayout={handleLayout} {...panResponder.panHandlers}>
       <Animated.View style={[styles.penguinContainer, animatedContainerStyle]}>
-        <AnimatedSprite
-          source={PENGUIN_SPRITE}
-          frameSize={SPRITE_SIZE}
-          scale={PENGUIN_SCALE}
-          animation={currentAnimation}
-          flipHorizontal={shouldFlip}
-        />
+        {/* Debug: hitSlop area (green) */}
+        {DEBUG_HITBOXES && (
+          <View
+            style={{
+              position: 'absolute',
+              top: -PRESSABLE_HITSLOP,
+              left: -PRESSABLE_HITSLOP,
+              width: PENGUIN_DISPLAY_SIZE + PRESSABLE_HITSLOP * 2,
+              height: PENGUIN_DISPLAY_SIZE + PRESSABLE_HITSLOP * 2,
+              borderWidth: 2,
+              borderColor: 'green',
+              backgroundColor: 'rgba(0, 255, 0, 0.1)',
+            }}
+            pointerEvents="none"
+          />
+        )}
+        {/* Debug: sprite bounds (red) */}
+        {DEBUG_HITBOXES && (
+          <View
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: PENGUIN_DISPLAY_SIZE,
+              height: PENGUIN_DISPLAY_SIZE,
+              borderWidth: 2,
+              borderColor: 'red',
+            }}
+            pointerEvents="none"
+          />
+        )}
+        <Pressable
+          onPress={handlePenguinTap}
+          hitSlop={{
+            top: PRESSABLE_HITSLOP,
+            bottom: PRESSABLE_HITSLOP,
+            left: PRESSABLE_HITSLOP,
+            right: PRESSABLE_HITSLOP,
+          }}
+        >
+          <AnimatedSprite
+            source={PENGUIN_SPRITE}
+            frameSize={SPRITE_SIZE}
+            scale={PENGUIN_SCALE}
+            animation={currentAnimation}
+            flipHorizontal={shouldFlip}
+          />
+        </Pressable>
       </Animated.View>
+      {coins.map((coin) => (
+        <SpinningCoin
+          key={coin.id}
+          startX={coin.x}
+          startY={coin.y}
+          onComplete={() => removeCoin(coin.id)}
+        />
+      ))}
     </View>
   )
 }
