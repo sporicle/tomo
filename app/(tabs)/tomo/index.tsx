@@ -1,16 +1,17 @@
 import { AppText } from '@/components/app-text'
 import { AppView } from '@/components/app-view'
 import { AnimatedSprite } from '@/components/animated-sprite'
-import { useThemeColor } from '@/hooks/use-theme-color'
+import { InteractivePenguin } from '@/components/interactive-penguin'
+import { PixelHUD } from '@/components/pixel-hud'
+import { PixelButton } from '@/components/pixel-button'
 import { ellipsify } from '@/utils/ellipsify'
 import React, { useState, useEffect, useCallback } from 'react'
-import { View, Pressable, ActivityIndicator } from 'react-native'
+import { View, Pressable, ActivityIndicator, StyleSheet } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useFocusEffect } from 'expo-router'
 import NfcManager, { NfcTech } from 'react-native-nfc-manager'
 import Snackbar from 'react-native-snackbar'
 import {
-  getTomoPDA,
   useTomoProgram,
   useTomoAccountQuery,
   useInitAndDelegate,
@@ -43,50 +44,21 @@ function AnimatedEllipsis() {
   )
 }
 
-function formatTimestamp(timestamp: number): string {
+function formatLastFedShort(timestamp: number): string {
   if (timestamp === 0) return 'Never'
   const date = new Date(timestamp * 1000)
   const now = new Date()
   const diffMs = now.getTime() - date.getTime()
   const diffMins = Math.floor(diffMs / 60000)
 
-  if (diffMins < 1) return 'Just now'
-  if (diffMins < 60) return `${diffMins} min${diffMins === 1 ? '' : 's'} ago`
+  if (diffMins < 1) return 'Now'
+  if (diffMins < 60) return `${diffMins}m`
 
   const diffHours = Math.floor(diffMins / 60)
-  if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? '' : 's'} ago`
+  if (diffHours < 24) return `${diffHours}h`
 
   const diffDays = Math.floor(diffHours / 24)
-  return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`
-}
-
-function HungerBar({ hunger }: { hunger: number }) {
-  const filledColor = hunger > 60 ? '#4CAF50' : hunger > 30 ? '#FFC107' : '#F44336'
-  const backgroundColor = useThemeColor({ light: '#e0e0e0', dark: '#444444' }, 'background')
-
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-      <View
-        style={{
-          flex: 1,
-          height: 16,
-          backgroundColor,
-          borderRadius: 8,
-          overflow: 'hidden',
-        }}
-      >
-        <View
-          style={{
-            width: `${hunger}%`,
-            height: '100%',
-            backgroundColor: filledColor,
-            borderRadius: 8,
-          }}
-        />
-      </View>
-      <AppText style={{ width: 60 }}>{hunger}/100</AppText>
-    </View>
-  )
+  return `${diffDays}d`
 }
 
 type ScreenState = 'scanning' | 'loading' | 'not_initialized' | 'hatching' | 'initialized'
@@ -99,16 +71,12 @@ export default function TabTomoScreen() {
   const [isProcessingHatch, setIsProcessingHatch] = useState(false)
   const [hatchPhase, setHatchPhase] = useState<HatchPhase>('idle')
 
-  const backgroundColor = useThemeColor({ light: '#f0f0f0', dark: '#333333' }, 'background')
-  const borderColor = useThemeColor({ light: '#cccccc', dark: '#555555' }, 'background')
-
   const tomoQuery = useTomoAccountQuery({ uid: scannedUid ?? '' })
   const initAndDelegate = useInitAndDelegate()
   const getCoin = useGetCoin()
   const feed = useFeed()
 
   const tomo = tomoQuery.data
-  const pda = scannedUid ? getTomoPDA(scannedUid) : null
   const coins = tomo?.coins?.toNumber() ?? 0
   const canFeed = coins >= 10
 
@@ -298,116 +266,96 @@ export default function TabTomoScreen() {
     )
   }
 
-  // Initialized state - show tomo data
+  // Initialized state - show interactive penguin
+  const hunger = tomo?.hunger ?? 0
+  const lastFedTime = tomo?.lastFed?.toNumber() ?? 0
+
   return (
-    <AppView style={{ flex: 1 }}>
-      <SafeAreaView style={{ flex: 1, padding: 16 }}>
-        <View style={{ flex: 1, gap: 16 }}>
-          {/* Tomo State Card */}
-          <View
-            style={{
-              gap: 12,
-              padding: 16,
-              backgroundColor,
-              borderRadius: 12,
-              borderWidth: 1,
-              borderColor,
-            }}
-          >
-            <AppText type="subtitle">Tomo</AppText>
+    <View style={penguinStyles.container}>
+      {/* Penguin play area */}
+      <InteractivePenguin style={penguinStyles.playArea} />
 
-            <View style={{ gap: 8 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                <AppText style={{ color: '#888' }}>UID:</AppText>
-                <AppText style={{ fontFamily: 'monospace' }}>{scannedUid}</AppText>
-              </View>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                <AppText style={{ color: '#888' }}>PDA:</AppText>
-                <AppText>{pda ? ellipsify(pda.toString(), 8) : '-'}</AppText>
-              </View>
-              {tomo && (
-                <>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                    <AppText style={{ color: '#888' }}>Owner:</AppText>
-                    <AppText>{ellipsify(tomo.owner.toString(), 8)}</AppText>
-                  </View>
-                </>
-              )}
-            </View>
+      {/* HUD overlay */}
+      <SafeAreaView style={penguinStyles.hudContainer} pointerEvents="box-none">
+        <PixelHUD
+          coins={coins}
+          hunger={hunger}
+          lastFed={formatLastFedShort(lastFedTime)}
+        />
+      </SafeAreaView>
 
-            {tomo && (
-              <>
-                <View style={{ gap: 4 }}>
-                  <AppText style={{ color: '#888' }}>Hunger:</AppText>
-                  <HungerBar hunger={tomo.hunger} />
-                </View>
-
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <AppText style={{ color: '#888' }}>Coins:</AppText>
-                  <AppText>{coins}</AppText>
-                </View>
-
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <AppText style={{ color: '#888' }}>Last Fed:</AppText>
-                  <AppText>{formatTimestamp(tomo.lastFed.toNumber())}</AppText>
-                </View>
-              </>
-            )}
-          </View>
-
-          {/* Actions */}
-          {tomo && (
-            <View style={{ flexDirection: 'row', gap: 12 }}>
-              <Pressable
+      {/* Bottom action bar */}
+      <SafeAreaView edges={['bottom']} style={penguinStyles.actionBar}>
+        <View style={penguinStyles.actionBarInner}>
+          <View style={penguinStyles.buttonRow}>
+            <View style={penguinStyles.buttonWrapper}>
+              <PixelButton
+                title="Get Coin"
                 onPress={handleGetCoin}
-                disabled={getCoin.isPending}
-                style={{
-                  flex: 1,
-                  paddingVertical: 16,
-                  backgroundColor: getCoin.isPending ? '#ccc' : '#2196F3',
-                  borderRadius: 12,
-                  alignItems: 'center',
-                }}
-              >
-                {getCoin.isPending ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <AppText style={{ color: '#fff', fontWeight: '600' }}>Get Coin</AppText>
-                )}
-              </Pressable>
-
-              <Pressable
-                onPress={handleFeed}
-                disabled={!canFeed || feed.isPending}
-                style={{
-                  flex: 1,
-                  paddingVertical: 16,
-                  backgroundColor: !canFeed || feed.isPending ? '#ccc' : '#4CAF50',
-                  borderRadius: 12,
-                  alignItems: 'center',
-                }}
-              >
-                {feed.isPending ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <AppText style={{ color: '#fff', fontWeight: '600' }}>Feed (10)</AppText>
-                )}
-              </Pressable>
+                variant="primary"
+                loading={getCoin.isPending}
+              />
             </View>
-          )}
-
-          {/* Scan Again */}
-          <Pressable
-            onPress={handleScanAgain}
-            style={{
-              paddingVertical: 12,
-              alignItems: 'center',
-            }}
-          >
-            <AppText style={{ color: '#2196F3' }}>Scan Another</AppText>
+            <View style={penguinStyles.buttonWrapper}>
+              <PixelButton
+                title={`Feed (10)`}
+                onPress={handleFeed}
+                variant="success"
+                disabled={!canFeed}
+                loading={feed.isPending}
+              />
+            </View>
+          </View>
+          <Pressable onPress={handleScanAgain} style={penguinStyles.scanAgain}>
+            <AppText style={penguinStyles.scanAgainText}>Scan Another</AppText>
           </Pressable>
         </View>
       </SafeAreaView>
-    </AppView>
+    </View>
   )
 }
+
+const penguinStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#1a1a2e',
+  },
+  playArea: {
+    flex: 1,
+  },
+  hudContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+  },
+  actionBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(26, 26, 46, 0.95)',
+    borderTopWidth: 3,
+    borderTopColor: '#4a4a6a',
+  },
+  actionBarInner: {
+    padding: 12,
+    gap: 8,
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  buttonWrapper: {
+    flex: 1,
+  },
+  scanAgain: {
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+  scanAgainText: {
+    color: '#81d4fa',
+    fontFamily: 'SpaceMono',
+    fontSize: 12,
+  },
+})

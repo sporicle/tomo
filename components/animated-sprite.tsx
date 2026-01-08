@@ -17,6 +17,7 @@ interface AnimatedSpriteProps {
   frameSize?: number
   animation: SpriteAnimation
   scale?: number
+  flipHorizontal?: boolean
   onAnimationComplete?: () => void
 }
 
@@ -25,6 +26,7 @@ export function AnimatedSprite({
   frameSize = 64,
   animation,
   scale = 1,
+  flipHorizontal = false,
   onAnimationComplete,
 }: AnimatedSpriteProps) {
   const frameIndex = useSharedValue(0)
@@ -83,7 +85,7 @@ export function AnimatedSprite({
           {
             width: frameSize,
             height: frameSize,
-            transform: [{ scale }],
+            transform: [{ scale }, { scaleX: flipHorizontal ? -1 : 1 }],
           },
         ]}
       >
