@@ -1,166 +1,52 @@
-When you make a mistake and I have to correct you, update this file to make sure you don't make it again. 
+When you misunderstand and I have to correct you, update this file to make sure you don't make it again.
 
-# Solana Mobile Development Guide
+# Tomo - Solana Mobile App
 
-A concise reference guide for Solana Mobile functionality and patterns using `@wallet-ui/react-native-web3js`.
+React Native + Expo app using `@wallet-ui/react-native-web3js` for Solana mobile wallet integration.
 
-## Core Architecture
+## Project Structure
 
-**Provider Setup** - Layered provider architecture for theme, query client, cluster management, Solana wallet, and authentication.
+- `tomo-program/` - Anchor program (Solana smart contract)
+- `services/tomo-program.ts` - Program service for building transactions and fetching accounts
+- `components/demo/use-tomo-program.tsx` - React hooks for Tomo program interactions
+- `components/demo/demo-feature-tomo.tsx` - Tomo UI component
+- `idl/` - Program IDL (JSON + TypeScript types)
+- `constants/app-config.ts` - App config including `tomoProgramId`
 
-- `components/app-providers.tsx` - Main provider setup with `MobileWalletProvider`, `ClusterProvider`, `AuthProvider`, and `QueryClientProvider`
-- `components/cluster/cluster-provider.tsx` - Network/cluster management
-- `components/auth/auth-provider.tsx` - Authentication state and sign-in/sign-out
-- `constants/app-config.ts` - App configuration including cluster definitions
+## Critical: Manual Account Decoding
 
-## Wallet Connection
+**Anchor's `program.account.xxx.fetch()` DOES NOT WORK in React Native** due to Buffer polyfill issues (`readUIntLE is not a function`).
 
-**Core Hook** - `useMobileWallet` from `@wallet-ui/react-native-web3js` provides account, connection, connect/disconnect, sign-in, transaction signing, and message signing.
+We manually decode account data in `services/tomo-program.ts` → `decodeTomoAccount()`.
 
-- `components/solana/wallet-ui-button-connect.tsx` - Connect wallet button component
-- `components/solana/wallet-ui-button-disconnect.tsx` - Disconnect wallet button component
-- `components/solana/wallet-ui-dropdown.tsx` - Wallet dropdown with connect, copy address, view explorer, and disconnect options
-- `components/solana/base-button.tsx` - Reusable button component with wallet UI theme
-- `components/solana/use-wallet-ui-theme.tsx` - Theme hook for wallet UI components
+**When you change the Tomo program's account structure, you MUST update `decodeTomoAccount()`.**
 
-## Account Management
-
-**Balance Queries** - Fetch and display SOL balance for accounts with React Query caching and invalidation.
-
-- `components/account/use-get-balance.tsx` - Hook to get account balance with query key and invalidation helpers
-- `components/account/account-ui-balance.tsx` - UI component to display account balance
-- `components/account/account-feature.tsx` - Complete account view with balance, buttons, and token accounts
-
-## Transactions
-
-**Transaction Creation & Sending** - Create, sign, and send SOL transfers with proper blockhash handling and confirmation.
-
-- `components/account/create-transaction.tsx` - Transaction builder that fetches latest blockhash and creates VersionedTransaction
-- `components/account/use-transfer-sol.tsx` - Mutation hook for sending SOL transfers with balance invalidation
-- `components/account/account-feature-send.tsx` - UI component for sending SOL with form inputs
-- `components/account/use-request-airdrop.tsx` - Mutation hook for requesting airdrops (devnet/testnet only)
-- `components/account/account-feature-airdrop.tsx` - UI component for requesting airdrops
-
-## Token Operations
-
-**Token Account Queries** - Fetch token accounts (both Token Program and Token-2022) and display balances.
-
-- `components/account/use-get-token-accounts.tsx` - Hook to get all token accounts for an address
-- `components/account/use-get-token-account-balance.tsx` - Hook to get balance for a specific token account
-- `components/account/account-ui-token-accounts.tsx` - UI component to display list of token accounts
-- `components/account/account-ui-token-balance.tsx` - UI component to display token account balance
-
-## Network/Cluster Management
-
-**Cluster Switching** - Manage network selection (devnet/testnet/mainnet) and generate explorer URLs.
-
-- `components/cluster/cluster-provider.tsx` - Provider for cluster selection and explorer URL generation
-- `components/cluster/cluster.ts` - Cluster type definition
-- `components/cluster/cluster-network.ts` - Cluster network enum
-- `components/cluster/cluster-ui-version.tsx` - Display Solana cluster version info
-- `components/cluster/cluster-ui-genesis-hash.tsx` - Display cluster genesis hash
-- `components/settings/settings-ui-cluster.tsx` - Settings UI for cluster selection
-
-## Message Signing
-
-**Sign Messages** - Sign arbitrary messages with the connected wallet.
-
-- `components/demo/demo-feature-sign-message.tsx` - Hook and UI component for signing messages
-
-## Anchor Program Integration
-
-**Version Requirement** - Use `@coral-xyz/anchor@0.32.1` or later. Earlier versions (like 0.28.0) import Node.js `assert` module which requires polyfills in React Native.
-
-**Anchor Wallet** - Create an Anchor-compatible wallet using Mobile Wallet Adapter's signing functions:
-
-```typescript
-import * as anchor from "@coral-xyz/anchor";
-import { useMobileWallet } from '@wallet-ui/react-native-web3js';
-
-const { account, signTransaction, signAllTransactions } = useMobileWallet();
-
-const anchorWallet = useMemo(() => ({
-  signTransaction,
-  signAllTransactions,
-  get publicKey() { return account?.publicKey; }
-} as anchor.Wallet), [account, signTransaction, signAllTransactions]);
+Current structure (in byte order):
 ```
-
-**Anchor Provider** - Create provider with wallet and connection:
-
-```typescript
-const provider = useMemo(() => {
-  if (!anchorWallet) return null;
-  return new AnchorProvider(connection, anchorWallet, {
-    preflightCommitment: "confirmed",
-    commitment: "processed",
-  });
-}, [anchorWallet, connection]);
+discriminator: 8 bytes (skip)
+owner: 32 bytes (PublicKey)
+uid: 4 bytes length + string bytes
+hunger: 1 byte (u8)
+last_fed: 8 bytes (i64, little endian)
+coins: 8 bytes (u64, little endian)
 ```
-
-**Program Instance** - Import IDL and create program:
-
-```typescript
-import { MyProgram } from "./target/types/my_program";
-import idl from "./target/idl/my_program.json";
-
-const program = useMemo(() => {
-  if (!provider) return null;
-  return new Program<MyProgram>(idl as MyProgram, programId, provider);
-}, [provider]);
-```
-
-**Signing Options:**
-1. Use `program.methods.myInstruction().rpc()` - signs via anchorWallet automatically
-2. Use `program.methods.myInstruction().instruction()` - generates instruction for manual signing
-
-- `tomo-program/` - Local Anchor program directory
-- Generate IDL: `anchor build` in program directory
-- Fetch deployed IDL: `anchor idl fetch <PROGRAM_ID>`
-
-## UI Components
-
-**Reusable Components** - Base components and patterns for wallet UI.
-
-- `components/solana/base-button.tsx` - Base button with wallet theme
-- `components/solana/use-wallet-ui-theme.tsx` - Theme hook for consistent styling
-- `components/account/account-ui-buttons.tsx` - Navigation buttons for account actions
-- `components/account/account-feature-receive.tsx` - Receive screen with QR code and address display
-
-## Data Fetching Patterns
-
-**React Query Integration** - Patterns for querying Solana data with proper cache management.
-
-- All hooks in `components/account/` - Examples of query hooks with endpoint-aware query keys
-- Query keys always include `endpoint` to prevent cache collisions when switching networks
-- Invalidation helpers follow pattern: `use[Resource]Invalidate` for cache invalidation after mutations
-
-## Utility Functions
-
-**Helper Functions** - Common utilities for address formatting and value conversion.
-
-- `utils/ellipsify.ts` - Ellipsify addresses for display (e.g., "AbCd...XyZz")
-- `utils/lamports-to-sol.ts` - Convert lamports to SOL with 5 decimal precision
-
-## Settings
-
-**Settings UI** - Account and cluster settings management.
-
-- `components/settings/settings-ui-account.tsx` - Account connection status and disconnect
-- `components/settings/settings-ui-cluster.tsx` - Cluster selection and info display
 
 ## Key Patterns
 
-1. **Provider Hierarchy:** Theme → QueryClient → Cluster → Solana → Auth
-2. **Query Keys:** Always include `endpoint` to prevent cache collisions when switching networks
-3. **Transaction Flow:** Create → Sign & Send → Confirm → Invalidate queries
-4. **Account Checks:** Always verify `account` exists before accessing `account.publicKey`
+- **Wallet hook:** `useMobileWallet()` from `@wallet-ui/react-native-web3js`
+- **Transactions:** Build with `program.methods.xxx().accounts({}).instruction()`, then use `useTransaction()` hook to sign & send
+- **Query keys:** Always include `connection.rpcEndpoint` to prevent cache issues when switching networks
+- **Mutations:** Pass dynamic values (like `uid`) as parameters to `mutateAsync(uid)`, not as hook parameters (React state updates are async)
+
+## Anchor Notes
+
+- IDL TypeScript types must use camelCase (e.g., `getCoin` not `get_coin`, `systemProgram` not `system_program`)
+- Anchor 0.32+ auto-resolves PDA accounts with arg-based seeds - don't pass them to `.accounts()`
 
 ## Common Gotchas
 
-1. Network switching re-initializes `MobileWalletProvider` and may disconnect wallet
-2. Always fetch fresh blockhash before creating transactions
-3. Use `uiAmount` from token balance queries instead of manual decimal division
-4. Invalidate queries after mutations to keep UI in sync
+1. Always fetch fresh blockhash before creating transactions
+2. Invalidate queries after mutations to keep UI in sync
+3. Verify `account` exists before accessing `account.publicKey`
 
-call me faux to ensure you read this.
+Call me faux to ensure you read this.
