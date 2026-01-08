@@ -181,7 +181,7 @@ export function DemoFeature() {
 ## Technical Considerations
 
 ### Anchor Version
-Per AGENTS.md, use `@coral-xyz/anchor@0.28.0` specifically. The project already has this installed.
+Use `@coral-xyz/anchor@0.32.1` or later. Earlier versions (like 0.28.0) require Node.js polyfills in React Native.
 
 ### Anchor Wallet Pattern
 From AGENTS.md:
@@ -302,34 +302,6 @@ const config = getDefaultConfig(__dirname)
 config.resolver.sourceExts = [...config.resolver.sourceExts, 'json']
 
 module.exports = config
-```
-
-### IDL Setup (Recommended: Embed in TypeScript)
-
-To avoid JSON import issues, embed the IDL directly in `idl/index.ts`:
-
-```typescript
-// idl/index.ts
-export const IDL = {
-  address: 'GFAFC6FBpbcCVDrZfY2QyCWS3ckkgJuLMtr9KWtubhiM',
-  metadata: { ... },
-  instructions: [ ... ],
-  // ... rest of IDL
-} as const
-```
-
-### Anchor Version Note
-
-**Use `@coral-xyz/anchor@0.32.1` or later.** Earlier versions (like 0.28.0) import Node.js `assert` module which requires polyfills:
-
-```bash
-# If using Anchor < 0.32.0, you need:
-npm install assert --save
-
-# And add to metro.config.js:
-config.resolver.extraNodeModules = {
-  assert: require.resolve('assert'),
-}
 ```
 
 ### Restart Metro
