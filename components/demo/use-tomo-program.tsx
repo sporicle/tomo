@@ -47,74 +47,77 @@ export function useTomoAccountQuery({ uid }: { uid: string }) {
   return useQuery({
     queryKey: ['tomo-account', { endpoint: connection.rpcEndpoint, uid }],
     queryFn: async (): Promise<TomoAccount | null> => {
+      console.log('useTomoAccountQuery fetching for uid:', uid)
       if (!uid) return null
-      return programService.fetchTomo(uid)
+      const result = await programService.fetchTomo(uid)
+      console.log('useTomoAccountQuery result:', result)
+      return result
     },
     enabled: !!uid,
   })
 }
 
-export function useTomoAccountInvalidate({ uid }: { uid: string }) {
+export function useTomoAccountInvalidate() {
   const { connection } = useTomoProgram()
   const queryClient = useQueryClient()
 
-  return () => {
+  return (uid: string) => {
     return queryClient.invalidateQueries({
       queryKey: ['tomo-account', { endpoint: connection.rpcEndpoint, uid }],
     })
   }
 }
 
-export function useInitTomo({ uid }: { uid: string }) {
+export function useInitTomo() {
   const { programService, connection, getAccountPublicKey, executeTransaction } = useTomoProgram()
-  const invalidate = useTomoAccountInvalidate({ uid })
+  const invalidate = useTomoAccountInvalidate()
 
   return useMutation({
-    mutationKey: ['init-tomo', { endpoint: connection.rpcEndpoint, uid }],
-    mutationFn: async () => {
+    mutationKey: ['init-tomo', { endpoint: connection.rpcEndpoint }],
+    mutationFn: async (uid: string) => {
       const payer = getAccountPublicKey()
       const tx = await programService.buildInitTx({ payer, uid })
       const signature = await executeTransaction(tx)
       return signature
     },
-    onSuccess: async () => {
-      await invalidate()
+    onSuccess: async (_data, uid) => {
+      await invalidate(uid)
     },
   })
 }
 
-export function useGetCoin({ uid }: { uid: string }) {
+export function useGetCoin() {
   const { programService, connection, getAccountPublicKey, executeTransaction } = useTomoProgram()
-  const invalidate = useTomoAccountInvalidate({ uid })
+  const invalidate = useTomoAccountInvalidate()
 
   return useMutation({
-    mutationKey: ['get-coin', { endpoint: connection.rpcEndpoint, uid }],
-    mutationFn: async () => {
+    mutationKey: ['get-coin', { endpoint: connection.rpcEndpoint }],
+    mutationFn: async (uid: string) => {
       const payer = getAccountPublicKey()
       const tx = await programService.buildGetCoinTx({ payer, uid })
       const signature = await executeTransaction(tx)
       return signature
     },
-    onSuccess: async () => {
-      await invalidate()
+    onSuccess: async (_data, uid) => {
+      await invalidate(uid)
     },
   })
 }
 
-export function useFeed({ uid }: { uid: string }) {
+export function useFeed() {
   const { programService, connection, getAccountPublicKey, executeTransaction } = useTomoProgram()
-  const invalidate = useTomoAccountInvalidate({ uid })
+  const invalidate = useTomoAccountInvalidate()
 
   return useMutation({
-    mutationKey: ['feed', { endpoint: connection.rpcEndpoint, uid }],
-    mutationFn: async () => {
+    mutationKey: ['feed', { endpoint: connection.rpcEndpoint }],
+    mutationFn: async (uid: string) => {
       const payer = getAccountPublicKey()
       const tx = await programService.buildFeedTx({ payer, uid })
       const signature = await executeTransaction(tx)
       return signature
     },
-    onSuccess: async () => {
-      await invalidate()
+    onSuccess: async (_data, uid) => {
+      await invalidate(uid)
     },
   })
 }

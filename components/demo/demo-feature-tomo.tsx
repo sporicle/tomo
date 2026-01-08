@@ -71,9 +71,9 @@ export function DemoFeatureTomo() {
   const borderColor = useThemeColor({ light: '#cccccc', dark: '#555555' }, 'background')
 
   const tomoQuery = useTomoAccountQuery({ uid: activeUid })
-  const initTomo = useInitTomo({ uid: activeUid })
-  const getCoin = useGetCoin({ uid: activeUid })
-  const feed = useFeed({ uid: activeUid })
+  const initTomo = useInitTomo()
+  const getCoin = useGetCoin()
+  const feed = useFeed()
 
   const tomo = tomoQuery.data
   const pda = activeUid ? getTomoPDA(activeUid) : null
@@ -83,13 +83,14 @@ export function DemoFeatureTomo() {
   const canFeed = coins >= 10
 
   const handleInit = () => {
-    if (!uid.trim()) {
+    const uidValue = uid.trim()
+    if (!uidValue) {
       Snackbar.show({ text: 'Please enter a UID', duration: Snackbar.LENGTH_SHORT })
       return
     }
-    setActiveUid(uid.trim())
+    setActiveUid(uidValue)
     initTomo
-      .mutateAsync()
+      .mutateAsync(uidValue)
       .then((sig) => {
         Snackbar.show({ text: `Tomo initialized! ${ellipsify(sig, 8)}`, duration: Snackbar.LENGTH_SHORT })
       })
@@ -100,8 +101,9 @@ export function DemoFeatureTomo() {
   }
 
   const handleGetCoin = () => {
+    if (!activeUid) return
     getCoin
-      .mutateAsync()
+      .mutateAsync(activeUid)
       .then((sig) => {
         Snackbar.show({ text: `Got a coin! ${ellipsify(sig, 8)}`, duration: Snackbar.LENGTH_SHORT })
       })
@@ -112,8 +114,9 @@ export function DemoFeatureTomo() {
   }
 
   const handleFeed = () => {
+    if (!activeUid) return
     feed
-      .mutateAsync()
+      .mutateAsync(activeUid)
       .then((sig) => {
         Snackbar.show({ text: `Fed Tomo! ${ellipsify(sig, 8)}`, duration: Snackbar.LENGTH_SHORT })
       })

@@ -113,21 +113,73 @@ export class TomoProgramService {
   }
 
   /**
+   * Manually decode Tomo account data
+   * Structure: discriminator (8) + owner (32) + uid string (4 + len) + hunger (1) + last_fed (8) + coins (8)
+   */
+  private decodeTomoAccount(data: Uint8Array): TomoAccount {
+    let offset = 8 // Skip discriminator
+
+    // Owner: 32 bytes
+    const ownerBytes = data.slice(offset, offset + 32)
+    const owner = new PublicKey(ownerBytes)
+    offset += 32
+
+    // UID: String (4 byte length prefix + string bytes)
+    const uidLen = data[offset] | (data[offset + 1] << 8) | (data[offset + 2] << 16) | (data[offset + 3] << 24)
+    offset += 4
+    const uidBytes = data.slice(offset, offset + uidLen)
+    const uid = new TextDecoder().decode(uidBytes)
+    offset += uidLen
+
+    // Hunger: u8
+    const hunger = data[offset]
+    offset += 1
+
+    // Last fed: i64 (little endian)
+    let lastFed = BigInt(0)
+    for (let i = 0; i < 8; i++) {
+      lastFed |= BigInt(data[offset + i]) << BigInt(i * 8)
+    }
+    offset += 8
+
+    // Coins: u64 (little endian)
+    let coins = BigInt(0)
+    for (let i = 0; i < 8; i++) {
+      coins |= BigInt(data[offset + i]) << BigInt(i * 8)
+    }
+
+    return {
+      owner,
+      uid,
+      hunger,
+      lastFed: new BN(lastFed.toString()),
+      coins: new BN(coins.toString()),
+    }
+  }
+
+  /**
    * Fetch Tomo account from blockchain
    */
   async fetchTomo(uid: string): Promise<TomoAccount | null> {
     try {
       const [tomoPDA] = this.getTomoPDA(uid)
-      const account = await this.program.account.tomo.fetch(tomoPDA)
-      return {
-        owner: account.owner,
-        uid: account.uid,
-        hunger: account.hunger,
-        lastFed: account.lastFed,
-        coins: account.coins,
+      console.log('Fetching Tomo account:', { uid, pda: tomoPDA.toString() })
+
+      // Fetch raw account info
+      const accountInfo = await this.connection.getAccountInfo(tomoPDA)
+      if (!accountInfo) {
+        console.log('Account not found')
+        return null
       }
+
+      // Manually decode to work around Buffer polyfill issues in React Native
+      const decoded = this.decodeTomoAccount(accountInfo.data)
+
+      console.log('Fetched account:', decoded)
+      return decoded
     } catch (error) {
-      // Account doesn't exist
+      console.error('Error fetching Tomo:', error)
+      // Account doesn't exist or other error
       return null
     }
   }
@@ -137,14 +189,11 @@ export class TomoProgramService {
    */
   async fetchTomoByPDA(pda: PublicKey): Promise<TomoAccount | null> {
     try {
-      const account = await this.program.account.tomo.fetch(pda)
-      return {
-        owner: account.owner,
-        uid: account.uid,
-        hunger: account.hunger,
-        lastFed: account.lastFed,
-        coins: account.coins,
+      const accountInfo = await this.connection.getAccountInfo(pda)
+      if (!accountInfo) {
+        return null
       }
+      return this.decodeTomoAccount(accountInfo.data)
     } catch (error) {
       return null
     }
