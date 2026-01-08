@@ -12,6 +12,7 @@ import {
   useTomoProgram,
   useTomoAccountQuery,
   useInitTomo,
+  useInitAndDelegate,
   useGetCoin,
   useFeed,
   useDelegate,
@@ -157,6 +158,7 @@ export function DemoFeatureTomo() {
 
   const tomoQuery = useTomoAccountQuery({ uid: activeUid })
   const initTomo = useInitTomo()
+  const initAndDelegate = useInitAndDelegate()
   const getCoin = useGetCoin()
   const feed = useFeed()
   const delegate = useDelegate()
@@ -167,6 +169,7 @@ export function DemoFeatureTomo() {
 
   const isLoading =
     initTomo.isPending ||
+    initAndDelegate.isPending ||
     getCoin.isPending ||
     feed.isPending ||
     delegate.isPending ||
@@ -189,6 +192,24 @@ export function DemoFeatureTomo() {
       })
       .catch((err) => {
         console.error('Init error:', err)
+        Snackbar.show({ text: `Error: ${err.message}`, duration: Snackbar.LENGTH_LONG })
+      })
+  }
+
+  const handleInitAndDelegate = () => {
+    const uidValue = uid.trim()
+    if (!uidValue) {
+      Snackbar.show({ text: 'Please enter a UID', duration: Snackbar.LENGTH_SHORT })
+      return
+    }
+    setActiveUid(uidValue)
+    initAndDelegate
+      .mutateAsync(uidValue)
+      .then((sig) => {
+        Snackbar.show({ text: `Init + Delegate done! ${ellipsify(sig, 8)}`, duration: Snackbar.LENGTH_SHORT })
+      })
+      .catch((err) => {
+        console.error('Init+Delegate error:', err)
         Snackbar.show({ text: `Error: ${err.message}`, duration: Snackbar.LENGTH_LONG })
       })
   }
@@ -304,7 +325,12 @@ export function DemoFeatureTomo() {
           </View>
           <View style={{ flex: 1 }}>
             <Button onPress={handleInit} disabled={isLoading || !uid.trim()} variant="filled">
-              Initialize
+              Init
+            </Button>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Button onPress={handleInitAndDelegate} disabled={isLoading || !uid.trim()} variant="filled">
+              Init+Dlgt
             </Button>
           </View>
         </View>
@@ -433,12 +459,14 @@ export function DemoFeatureTomo() {
       )}
 
       {(initTomo.isError ||
+        initAndDelegate.isError ||
         getCoin.isError ||
         feed.isError ||
         delegate.isError ||
         undelegate.isError) && (
         <AppText style={{ color: '#F44336', fontSize: 12, marginTop: 8 }}>
           {initTomo.error?.message ||
+            initAndDelegate.error?.message ||
             getCoin.error?.message ||
             feed.error?.message ||
             delegate.error?.message ||

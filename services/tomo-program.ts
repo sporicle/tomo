@@ -172,6 +172,36 @@ export class TomoProgramService {
   }
 
   /**
+   * Build init + delegate transaction (combined in single tx)
+   * This initializes a Tomo account and immediately delegates it
+   */
+  async buildInitAndDelegateTx(params: {
+    payer: PublicKey
+    uid: string
+  }): Promise<Transaction> {
+    const initInstruction = await this.program.methods
+      .init(params.uid)
+      .accounts({
+        payer: params.payer,
+      })
+      .instruction()
+
+    const delegateInstruction = await this.program.methods
+      .delegate(params.uid)
+      .accounts({
+        payer: params.payer,
+      })
+      .instruction()
+
+    const tx = new Transaction()
+    tx.add(initInstruction)
+    tx.add(delegateInstruction)
+    tx.feePayer = params.payer
+
+    return tx
+  }
+
+  /**
    * Build undelegate transaction
    * This undelegates the Tomo account from the ephemeral rollup back to base layer
    * NOTE: This transaction should be sent to the EPHEMERAL ROLLUP, not the base layer

@@ -117,6 +117,24 @@ export function useInitTomo() {
   })
 }
 
+export function useInitAndDelegate() {
+  const { programService, connection, getAccountPublicKey, executeTransaction } = useTomoProgram()
+  const invalidate = useTomoAccountInvalidate()
+
+  return useMutation({
+    mutationKey: ['init-and-delegate-tomo', { endpoint: connection.rpcEndpoint }],
+    mutationFn: async (uid: string) => {
+      const payer = getAccountPublicKey()
+      const tx = await programService.buildInitAndDelegateTx({ payer, uid })
+      const signature = await executeTransaction(tx)
+      return signature
+    },
+    onSuccess: async (_data, uid) => {
+      await invalidate(uid)
+    },
+  })
+}
+
 /**
  * Hook to get a coin using the embedded wallet.
  * This is a permissionless operation - no main wallet signature required.
