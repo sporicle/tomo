@@ -279,42 +279,19 @@ queryKey: ['tomo', { endpoint: connection.rpcEndpoint, uid }]
 
 ## Dependencies
 
-All required dependencies are already installed:
-- `@coral-xyz/anchor`: ^0.28.0
+Required dependencies:
+- `@coral-xyz/anchor`: ^0.32.1 (use 0.32.1+, earlier versions need Node.js polyfills)
 - `@solana/web3.js`: ^1.98.4
 - `@wallet-ui/react-native-web3js`: ^2.2.0
 - `@tanstack/react-query`: ^5.85.5
 
 ---
 
-## Metro Bundler Configuration (Node.js Polyfills)
+## Metro Bundler Configuration
 
-`@coral-xyz/anchor` imports Node.js built-in modules that don't exist in React Native. These must be polyfilled.
+### metro.config.js
 
-### Problem
-
-When running the app, Metro bundler fails with:
-```
-UnableToResolveError: Unable to resolve module assert from
-/Users/.../node_modules/@coral-xyz/anchor/dist/browser/index.js
-```
-
-### Solution
-
-#### Step 1: Install Node.js Polyfills
-
-```bash
-npm install assert --save
-```
-
-Other polyfills that may be needed (install if errors occur):
-```bash
-npm install stream-browserify events buffer --save
-```
-
-#### Step 2: Configure Metro Bundler
-
-Create or update `metro.config.js`:
+Basic configuration for JSON imports:
 
 ```javascript
 const { getDefaultConfig } = require('expo/metro-config')
@@ -324,33 +301,12 @@ const config = getDefaultConfig(__dirname)
 // Enable JSON imports for IDL files
 config.resolver.sourceExts = [...config.resolver.sourceExts, 'json']
 
-// Polyfill Node.js built-in modules for Anchor compatibility
-config.resolver.extraNodeModules = {
-  ...config.resolver.extraNodeModules,
-  assert: require.resolve('assert'),
-  // Add more as needed:
-  // stream: require.resolve('stream-browserify'),
-  // events: require.resolve('events'),
-}
-
 module.exports = config
 ```
 
-#### Step 3: Update tsconfig.json
+### IDL Setup (Recommended: Embed in TypeScript)
 
-Enable JSON module resolution:
-
-```json
-{
-  "compilerOptions": {
-    "resolveJsonModule": true
-  }
-}
-```
-
-#### Step 4: Embed IDL in TypeScript (Recommended)
-
-To avoid JSON import issues, embed the IDL directly in `idl/index.ts` instead of importing from JSON:
+To avoid JSON import issues, embed the IDL directly in `idl/index.ts`:
 
 ```typescript
 // idl/index.ts
@@ -362,26 +318,23 @@ export const IDL = {
 } as const
 ```
 
-#### Step 5: Restart Metro with Clean Cache
+### Anchor Version Note
 
-After making config changes:
+**Use `@coral-xyz/anchor@0.32.1` or later.** Earlier versions (like 0.28.0) import Node.js `assert` module which requires polyfills:
+
+```bash
+# If using Anchor < 0.32.0, you need:
+npm install assert --save
+
+# And add to metro.config.js:
+config.resolver.extraNodeModules = {
+  assert: require.resolve('assert'),
+}
+```
+
+### Restart Metro
+
+After config changes:
 ```bash
 npx expo start --clear
 ```
-
-### Common Node.js Modules Needed by Anchor
-
-| Module | Polyfill Package |
-|--------|------------------|
-| `assert` | `assert` |
-| `buffer` | `buffer` |
-| `stream` | `stream-browserify` |
-| `events` | `events` |
-| `crypto` | `react-native-quick-crypto` (already in project) |
-
-### Troubleshooting
-
-If you see `UnableToResolveError` for a Node.js module:
-1. Install the polyfill: `npm install <polyfill-package>`
-2. Add to `metro.config.js` extraNodeModules
-3. Restart Metro: `npx expo start --clear`

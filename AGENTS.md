@@ -69,7 +69,7 @@ A concise reference guide for Solana Mobile functionality and patterns using `@w
 
 ## Anchor Program Integration
 
-**Version Requirement** - Use `@coral-xyz/anchor@0.28.0` specifically. Later versions have polyfill issues on React Native.
+**Version Requirement** - Use `@coral-xyz/anchor@0.32.1` or later. Earlier versions (like 0.28.0) import Node.js `assert` module which requires polyfills in React Native.
 
 **Anchor Wallet** - Create an Anchor-compatible wallet using Mobile Wallet Adapter's signing functions:
 
