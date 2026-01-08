@@ -1,3 +1,5 @@
+When you make a mistake and I have to correct you, update this file to make sure you don't make it again. 
+
 # Solana Mobile Development Guide
 
 A concise reference guide for Solana Mobile functionality and patterns using `@wallet-ui/react-native-web3js`.
@@ -65,6 +67,57 @@ A concise reference guide for Solana Mobile functionality and patterns using `@w
 
 - `components/demo/demo-feature-sign-message.tsx` - Hook and UI component for signing messages
 
+## Anchor Program Integration
+
+**Version Requirement** - Use `@coral-xyz/anchor@0.28.0` specifically. Later versions have polyfill issues on React Native.
+
+**Anchor Wallet** - Create an Anchor-compatible wallet using Mobile Wallet Adapter's signing functions:
+
+```typescript
+import * as anchor from "@coral-xyz/anchor";
+import { useMobileWallet } from '@wallet-ui/react-native-web3js';
+
+const { account, signTransaction, signAllTransactions } = useMobileWallet();
+
+const anchorWallet = useMemo(() => ({
+  signTransaction,
+  signAllTransactions,
+  get publicKey() { return account?.publicKey; }
+} as anchor.Wallet), [account, signTransaction, signAllTransactions]);
+```
+
+**Anchor Provider** - Create provider with wallet and connection:
+
+```typescript
+const provider = useMemo(() => {
+  if (!anchorWallet) return null;
+  return new AnchorProvider(connection, anchorWallet, {
+    preflightCommitment: "confirmed",
+    commitment: "processed",
+  });
+}, [anchorWallet, connection]);
+```
+
+**Program Instance** - Import IDL and create program:
+
+```typescript
+import { MyProgram } from "./target/types/my_program";
+import idl from "./target/idl/my_program.json";
+
+const program = useMemo(() => {
+  if (!provider) return null;
+  return new Program<MyProgram>(idl as MyProgram, programId, provider);
+}, [provider]);
+```
+
+**Signing Options:**
+1. Use `program.methods.myInstruction().rpc()` - signs via anchorWallet automatically
+2. Use `program.methods.myInstruction().instruction()` - generates instruction for manual signing
+
+- `tomo-program/` - Local Anchor program directory
+- Generate IDL: `anchor build` in program directory
+- Fetch deployed IDL: `anchor idl fetch <PROGRAM_ID>`
+
 ## UI Components
 
 **Reusable Components** - Base components and patterns for wallet UI.
@@ -109,3 +162,5 @@ A concise reference guide for Solana Mobile functionality and patterns using `@w
 2. Always fetch fresh blockhash before creating transactions
 3. Use `uiAmount` from token balance queries instead of manual decimal division
 4. Invalidate queries after mutations to keep UI in sync
+
+call me faux to ensure you read this.

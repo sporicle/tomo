@@ -9,7 +9,8 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.beeman.web3jsexpo"
     },
     "android": {
       "adaptiveIcon": {
@@ -17,7 +18,10 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.beeman.web3jsexpo"
+      "package": "com.beeman.web3jsexpo",
+      "permissions": [
+        "android.permission.NFC"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -40,7 +44,8 @@
         }
       ],
       "expo-web-browser",
-      "expo-font"
+      "expo-font",
+      "react-native-nfc-manager"
     ],
     "experiments": {
       "typedRoutes": true
