@@ -1,5 +1,5 @@
 import { Program, AnchorProvider, BN } from '@coral-xyz/anchor'
-import { Connection, PublicKey, Transaction, SystemProgram } from '@solana/web3.js'
+import { Connection, PublicKey, Transaction, SystemProgram, SYSVAR_SLOT_HASHES_PUBKEY } from '@solana/web3.js'
 import { TomoProgram, IDL } from '@/idl'
 import { AppConfig } from '@/constants/app-config'
 
@@ -8,6 +8,7 @@ const DELEGATION_PROGRAM_ID = new PublicKey('DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaA
 const MAGIC_PROGRAM_ID = new PublicKey('Magic11111111111111111111111111111111111111')
 const MAGIC_CONTEXT_ID = new PublicKey('MagicContext1111111111111111111111111111111')
 const EPHEMERAL_ORACLE_QUEUE = new PublicKey('5hBR571xnXppuCPveTrctfTU7tJLSN94nq7kv7FRK5Tc')
+const VRF_PROGRAM_ID = new PublicKey('Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz')
 
 export interface TomoAccount {
   owner: PublicKey
@@ -91,11 +92,20 @@ export class TomoProgramService {
     payer: PublicKey
     uid: string
   }): Promise<Transaction> {
-    // In Anchor 0.32+, accounts with PDA seeds from args and fixed addresses are auto-resolved
+    const [tomoPDA] = this.getTomoPDA(params.uid)
+
+    // Derive crank_payer PDA
+    const [crankPayer] = PublicKey.findProgramAddressSync(
+      [Buffer.from('crank_payer'), tomoPDA.toBuffer()],
+      PROGRAM_ID
+    )
+
     const instruction = await this.program.methods
       .init(params.uid)
       .accounts({
         payer: params.payer,
+        tomo: tomoPDA,
+        crankPayer: crankPayer,
       })
       .instruction()
 
@@ -160,10 +170,20 @@ export class TomoProgramService {
     payer: PublicKey
     uid: string
   }): Promise<Transaction> {
+    const [tomoPDA] = this.getTomoPDA(params.uid)
+
+    // Derive crank_payer PDA
+    const [crankPayer] = PublicKey.findProgramAddressSync(
+      [Buffer.from('crank_payer'), tomoPDA.toBuffer()],
+      PROGRAM_ID
+    )
+
     const instruction = await this.program.methods
       .delegate(params.uid)
       .accounts({
         payer: params.payer,
+        tomo: tomoPDA,
+        crankPayer: crankPayer,
       })
       .instruction()
 
@@ -182,10 +202,20 @@ export class TomoProgramService {
     payer: PublicKey
     uid: string
   }): Promise<Transaction> {
+    const [tomoPDA] = this.getTomoPDA(params.uid)
+
+    // Derive crank_payer PDA
+    const [crankPayer] = PublicKey.findProgramAddressSync(
+      [Buffer.from('crank_payer'), tomoPDA.toBuffer()],
+      PROGRAM_ID
+    )
+
     const initInstruction = await this.program.methods
       .init(params.uid)
       .accounts({
         payer: params.payer,
+        tomo: tomoPDA,
+        crankPayer: crankPayer,
       })
       .instruction()
 
@@ -193,6 +223,8 @@ export class TomoProgramService {
       .delegate(params.uid)
       .accounts({
         payer: params.payer,
+        tomo: tomoPDA,
+        crankPayer: crankPayer,
       })
       .instruction()
 
@@ -364,7 +396,7 @@ export class TomoProgramService {
 
   /**
    * Build startRandomEvents transaction
-   * Schedules a crank to run randomEvent every 1000ms for 10 cycles
+   * Schedules a crank to run randomEventCrank periodically
    * NOTE: This transaction should be sent to the EPHEMERAL ROLLUP
    */
   async buildStartRandomEventsTx(params: {
@@ -375,6 +407,18 @@ export class TomoProgramService {
     iterations?: number
   }): Promise<Transaction> {
     const [tomoPDA] = this.getTomoPDA(params.uid)
+
+    // Derive crank_payer PDA
+    const [crankPayer] = PublicKey.findProgramAddressSync(
+      [Buffer.from('crank_payer'), tomoPDA.toBuffer()],
+      PROGRAM_ID
+    )
+
+    // Derive program_identity PDA
+    const [programIdentity] = PublicKey.findProgramAddressSync(
+      [Buffer.from('identity')],
+      PROGRAM_ID
+    )
 
     const instruction = await this.program.methods
       .startRandomEvents({
@@ -387,6 +431,11 @@ export class TomoProgramService {
         payer: params.payer,
         tomo: tomoPDA,
         oracleQueue: EPHEMERAL_ORACLE_QUEUE,
+        crankPayer: crankPayer,
+        programIdentity: programIdentity,
+        vrfProgram: VRF_PROGRAM_ID,
+        slotHashes: SYSVAR_SLOT_HASHES_PUBKEY,
+        systemProgram: SystemProgram.programId,
       })
       .instruction()
 

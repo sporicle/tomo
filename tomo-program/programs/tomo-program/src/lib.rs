@@ -30,6 +30,11 @@ pub mod tomo_program {
         tomo.coins = 0;
         tomo.item_drop = false;
         tomo.inventory = [0u8; 8];
+
+        // Initialize crank_payer placeholder
+        let crank_payer = &mut ctx.accounts.crank_payer;
+        crank_payer.initialized = true;
+
         Ok(())
     }
 
@@ -50,11 +55,21 @@ pub mod tomo_program {
 
     /// Delegate the Tomo account to the ephemeral rollup
     pub fn delegate(ctx: Context<DelegateInput>, uid: String) -> Result<()> {
+        // Delegate the tomo account
         ctx.accounts.delegate_tomo(
             &ctx.accounts.payer,
             &[TOMO_SEED, uid.as_bytes()],
             DelegateConfig::default(),
         )?;
+
+        // Also delegate the crank_payer PDA so it can be used in the ER
+        let tomo_key = ctx.accounts.tomo.key();
+        ctx.accounts.delegate_crank_payer(
+            &ctx.accounts.payer,
+            &[b"crank_payer", tomo_key.as_ref()],
+            DelegateConfig::default(),
+        )?;
+
         Ok(())
     }
 
@@ -213,28 +228,74 @@ pub mod tomo_program {
         Ok(())
     }
 
-    /// Start random events crank - runs random_event every 1000ms for 10 cycles
+    /// Crank-safe random event - uses PDA as payer so no external signer needed
+    pub fn random_event_crank(ctx: Context<RandomEventCrank>, client_seed: u8) -> Result<()> {
+        msg!("Crank executing random event...");
+
+        let tomo_key = ctx.accounts.tomo.key();
+        let bump = ctx.bumps.crank_payer;
+
+        let ix = create_request_randomness_ix(RequestRandomnessParams {
+            payer: ctx.accounts.crank_payer.key(),
+            oracle_queue: ctx.accounts.oracle_queue.key(),
+            callback_program_id: crate::ID,
+            callback_discriminator: crate::instruction::ConsumeRandomEvent::DISCRIMINATOR.to_vec(),
+            caller_seed: [client_seed; 32],
+            accounts_metas: Some(vec![SerializableAccountMeta {
+                pubkey: ctx.accounts.tomo.key(),
+                is_signer: false,
+                is_writable: true,
+            }]),
+            ..Default::default()
+        });
+
+        // Sign with the PDA seeds
+        let signer_seeds: &[&[&[u8]]] = &[&[b"crank_payer", tomo_key.as_ref(), &[bump]]];
+
+        invoke_signed(
+            &ix,
+            &[
+                ctx.accounts.crank_payer.to_account_info(),
+                ctx.accounts.oracle_queue.to_account_info(),
+                ctx.accounts.program_identity.to_account_info(),
+                ctx.accounts.vrf_program.to_account_info(),
+                ctx.accounts.slot_hashes.to_account_info(),
+                ctx.accounts.system_program.to_account_info(),
+            ],
+            signer_seeds,
+        )?;
+
+        Ok(())
+    }
+
+    /// Start random events crank - schedules random_event_crank to run periodically
     pub fn start_random_events(ctx: Context<StartRandomEvents>, args: ScheduleCrankArgs) -> Result<()> {
         msg!("Scheduling random events crank...");
 
-        // Build the instruction to be executed by the crank (random_event)
-        // We need to pass a client_seed - use a constant for crank calls
+        // Derive the crank payer PDA
+        let tomo_key = ctx.accounts.tomo.key();
+        let (crank_payer, _bump) = Pubkey::find_program_address(
+            &[b"crank_payer", tomo_key.as_ref()],
+            &crate::ID,
+        );
+
+        // Derive program identity PDA
+        let (program_identity, _) = Pubkey::find_program_address(&[b"identity"], &crate::ID);
+
+        // Build the instruction to be executed by the crank (random_event_crank)
+        // This instruction uses a PDA as payer, so no external signer needed
         let crank_ix = Instruction {
             program_id: crate::ID,
             accounts: vec![
-                AccountMeta::new(ctx.accounts.payer.key(), true),
                 AccountMeta::new(ctx.accounts.tomo.key(), false),
                 AccountMeta::new(ctx.accounts.oracle_queue.key(), false),
-                // program_identity PDA - derived from "identity" seed
-                AccountMeta::new_readonly(
-                    anchor_lang::prelude::Pubkey::find_program_address(&[b"identity"], &crate::ID).0,
-                    false,
-                ),
+                AccountMeta::new(crank_payer, false),
+                AccountMeta::new_readonly(program_identity, false),
                 AccountMeta::new_readonly(ephemeral_vrf_sdk::consts::VRF_PROGRAM_ID, false),
                 AccountMeta::new_readonly(anchor_lang::solana_program::sysvar::slot_hashes::ID, false),
                 AccountMeta::new_readonly(anchor_lang::solana_program::system_program::ID, false),
             ],
-            data: anchor_lang::InstructionData::data(&crate::instruction::RandomEvent {
+            data: anchor_lang::InstructionData::data(&crate::instruction::RandomEventCrank {
                 client_seed: 42, // Fixed seed for crank calls
             }),
         };
@@ -251,13 +312,19 @@ pub mod tomo_program {
             anchor_lang::solana_program::program_error::ProgramError::InvalidArgument
         })?;
 
-        // Create CPI instruction to Magic Program
+        // Create CPI instruction to Magic Program - must include ALL accounts used by scheduled instruction
         let schedule_ix = Instruction::new_with_bytes(
             MAGIC_PROGRAM_ID,
             &ix_data,
             vec![
                 AccountMeta::new(ctx.accounts.payer.key(), true),
                 AccountMeta::new(ctx.accounts.tomo.key(), false),
+                AccountMeta::new(ctx.accounts.oracle_queue.key(), false),
+                AccountMeta::new(crank_payer, false),
+                AccountMeta::new_readonly(program_identity, false),
+                AccountMeta::new_readonly(ctx.accounts.vrf_program.key(), false),
+                AccountMeta::new_readonly(ctx.accounts.slot_hashes.key(), false),
+                AccountMeta::new_readonly(ctx.accounts.system_program.key(), false),
             ],
         );
 
@@ -267,6 +334,12 @@ pub mod tomo_program {
             &[
                 ctx.accounts.payer.to_account_info(),
                 ctx.accounts.tomo.to_account_info(),
+                ctx.accounts.oracle_queue.to_account_info(),
+                ctx.accounts.crank_payer.to_account_info(),
+                ctx.accounts.program_identity.to_account_info(),
+                ctx.accounts.vrf_program.to_account_info(),
+                ctx.accounts.slot_hashes.to_account_info(),
+                ctx.accounts.system_program.to_account_info(),
             ],
             &[],
         )?;
@@ -287,6 +360,15 @@ pub struct Init<'info> {
         bump
     )]
     pub tomo: Account<'info, Tomo>,
+    /// Crank payer PDA - initialized alongside tomo so it can be delegated later
+    #[account(
+        init_if_needed,
+        payer = payer,
+        space = 8 + CrankPayer::INIT_SPACE,
+        seeds = [b"crank_payer", tomo.key().as_ref()],
+        bump
+    )]
+    pub crank_payer: Account<'info, CrankPayer>,
     #[account(mut)]
     pub payer: Signer<'info>,
     pub system_program: Program<'info, System>,
@@ -313,6 +395,9 @@ pub struct DelegateInput<'info> {
     /// CHECK: The Tomo PDA to delegate
     #[account(mut, del, seeds = [TOMO_SEED, uid.as_bytes()], bump)]
     pub tomo: AccountInfo<'info>,
+    /// CHECK: The crank_payer PDA to delegate
+    #[account(mut, del, seeds = [b"crank_payer", tomo.key().as_ref()], bump)]
+    pub crank_payer: AccountInfo<'info>,
 }
 
 #[commit]
@@ -390,6 +475,36 @@ pub struct ConsumeRandomEvent<'info> {
     pub tomo: Account<'info, Tomo>,
 }
 
+/// Accounts for crank-executed random event (no external signer needed)
+#[derive(Accounts)]
+pub struct RandomEventCrank<'info> {
+    #[account(mut)]
+    pub tomo: Account<'info, Tomo>,
+    /// CHECK: Oracle queue for VRF
+    #[account(mut, address = ephemeral_vrf_sdk::consts::DEFAULT_EPHEMERAL_QUEUE)]
+    pub oracle_queue: AccountInfo<'info>,
+    /// CHECK: PDA that acts as payer for VRF - derived from ["crank_payer", tomo.key()]
+    #[account(
+        mut,
+        seeds = [b"crank_payer", tomo.key().as_ref()],
+        bump
+    )]
+    pub crank_payer: AccountInfo<'info>,
+    /// CHECK: Program identity PDA for VRF
+    #[account(
+        seeds = [b"identity"],
+        bump
+    )]
+    pub program_identity: AccountInfo<'info>,
+    /// CHECK: VRF program
+    #[account(address = ephemeral_vrf_sdk::consts::VRF_PROGRAM_ID)]
+    pub vrf_program: AccountInfo<'info>,
+    /// CHECK: Slot hashes sysvar
+    #[account(address = anchor_lang::solana_program::sysvar::slot_hashes::ID)]
+    pub slot_hashes: AccountInfo<'info>,
+    pub system_program: Program<'info, System>,
+}
+
 #[derive(Accounts)]
 pub struct StartRandomEvents<'info> {
     /// CHECK: Magic program for crank scheduling
@@ -401,8 +516,28 @@ pub struct StartRandomEvents<'info> {
     #[account(mut)]
     pub tomo: AccountInfo<'info>,
     /// CHECK: Oracle queue for VRF (needed for the scheduled random_event calls)
-    #[account(address = ephemeral_vrf_sdk::consts::DEFAULT_EPHEMERAL_QUEUE)]
+    #[account(mut, address = ephemeral_vrf_sdk::consts::DEFAULT_EPHEMERAL_QUEUE)]
     pub oracle_queue: AccountInfo<'info>,
+    /// CHECK: PDA that acts as payer for VRF in crank calls
+    #[account(
+        mut,
+        seeds = [b"crank_payer", tomo.key().as_ref()],
+        bump
+    )]
+    pub crank_payer: AccountInfo<'info>,
+    /// CHECK: Program identity PDA for VRF
+    #[account(
+        seeds = [b"identity"],
+        bump
+    )]
+    pub program_identity: AccountInfo<'info>,
+    /// CHECK: VRF program
+    #[account(address = ephemeral_vrf_sdk::consts::VRF_PROGRAM_ID)]
+    pub vrf_program: AccountInfo<'info>,
+    /// CHECK: Slot hashes sysvar
+    #[account(address = anchor_lang::solana_program::sysvar::slot_hashes::ID)]
+    pub slot_hashes: AccountInfo<'info>,
+    pub system_program: Program<'info, System>,
 }
 
 /// Arguments for scheduling a crank
@@ -424,6 +559,13 @@ pub struct Tomo {
     pub coins: u64,
     pub item_drop: bool,
     pub inventory: [u8; 8],
+}
+
+/// Placeholder account for crank payer PDA - needs to exist to be delegated
+#[account]
+#[derive(InitSpace)]
+pub struct CrankPayer {
+    pub initialized: bool,
 }
 
 #[error_code]

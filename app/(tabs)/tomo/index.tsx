@@ -31,7 +31,7 @@ const UI_ICONS = require('@/assets/images/ui_icons.png')
 
 // UI icon constants (64x64 sprites)
 const UI_ICON_SIZE = 64
-const UI_ICON_SCALE = 0.7
+const UI_ICON_SCALE = 1
 
 // Item sprite constants
 const ITEM_SIZE = 64
@@ -372,7 +372,7 @@ export default function TabTomoScreen() {
               style={{
                 width: UI_ICON_SIZE * 10 * UI_ICON_SCALE,
                 height: UI_ICON_SIZE * UI_ICON_SCALE,
-                marginLeft: -UI_ICON_SIZE * UI_ICON_SCALE * 4, // Frame 4 - inventory bag (5th)
+                marginLeft: 0, // Frame 0 - inventory bag
               }}
             />
           </View>
@@ -391,7 +391,7 @@ export default function TabTomoScreen() {
               style={{
                 width: UI_ICON_SIZE * 10 * UI_ICON_SCALE,
                 height: UI_ICON_SIZE * UI_ICON_SCALE,
-                marginLeft: -UI_ICON_SIZE * UI_ICON_SCALE * 5, // Frame 5 - settings wheel (6th)
+                marginLeft: -UI_ICON_SIZE * UI_ICON_SCALE * 1, // Frame 1 - settings wheel
               }}
             />
           </View>

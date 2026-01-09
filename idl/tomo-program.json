@@ -263,6 +263,165 @@
           }
         },
         {
+          "name": "buffer_crank_payer",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "crank_payer"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                226,
+                127,
+                227,
+                97,
+                202,
+                182,
+                63,
+                229,
+                205,
+                191,
+                17,
+                155,
+                36,
+                155,
+                64,
+                81,
+                14,
+                121,
+                27,
+                23,
+                125,
+                75,
+                154,
+                185,
+                44,
+                252,
+                82,
+                157,
+                118,
+                93,
+                22,
+                174
+              ]
+            }
+          }
+        },
+        {
+          "name": "delegation_record_crank_payer",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  108,
+                  101,
+                  103,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "crank_payer"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "delegation_program"
+            }
+          }
+        },
+        {
+          "name": "delegation_metadata_crank_payer",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  108,
+                  101,
+                  103,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110,
+                  45,
+                  109,
+                  101,
+                  116,
+                  97,
+                  100,
+                  97,
+                  116,
+                  97
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "crank_payer"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "delegation_program"
+            }
+          }
+        },
+        {
+          "name": "crank_payer",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  97,
+                  110,
+                  107,
+                  95,
+                  112,
+                  97,
+                  121,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "tomo"
+              }
+            ]
+          }
+        },
+        {
           "name": "owner_program",
           "address": "GFAFC6FBpbcCVDrZfY2QyCWS3ckkgJuLMtr9KWtubhiM"
         },
@@ -383,6 +542,37 @@
               {
                 "kind": "arg",
                 "path": "uid"
+              }
+            ]
+          }
+        },
+        {
+          "name": "crank_payer",
+          "docs": [
+            "Crank payer PDA - initialized alongside tomo so it can be delegated later"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  97,
+                  110,
+                  107,
+                  95,
+                  112,
+                  97,
+                  121,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "tomo"
               }
             ]
           }
@@ -584,9 +774,102 @@
       ]
     },
     {
+      "name": "random_event_crank",
+      "docs": [
+        "Crank-safe random event - uses PDA as payer so no external signer needed"
+      ],
+      "discriminator": [
+        230,
+        34,
+        64,
+        152,
+        89,
+        119,
+        85,
+        194
+      ],
+      "accounts": [
+        {
+          "name": "tomo",
+          "writable": true
+        },
+        {
+          "name": "oracle_queue",
+          "writable": true,
+          "address": "5hBR571xnXppuCPveTrctfTU7tJLSN94nq7kv7FRK5Tc"
+        },
+        {
+          "name": "crank_payer",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  97,
+                  110,
+                  107,
+                  95,
+                  112,
+                  97,
+                  121,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "tomo"
+              }
+            ]
+          }
+        },
+        {
+          "name": "program_identity",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  100,
+                  101,
+                  110,
+                  116,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "vrf_program",
+          "address": "Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz"
+        },
+        {
+          "name": "slot_hashes",
+          "address": "SysvarS1otHashes111111111111111111111111111"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "client_seed",
+          "type": "u8"
+        }
+      ]
+    },
+    {
       "name": "start_random_events",
       "docs": [
-        "Start random events crank - runs random_event every 1000ms for 10 cycles"
+        "Start random events crank - schedules random_event_crank to run periodically"
       ],
       "discriminator": [
         198,
@@ -614,7 +897,68 @@
         },
         {
           "name": "oracle_queue",
+          "writable": true,
           "address": "5hBR571xnXppuCPveTrctfTU7tJLSN94nq7kv7FRK5Tc"
+        },
+        {
+          "name": "crank_payer",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  97,
+                  110,
+                  107,
+                  95,
+                  112,
+                  97,
+                  121,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "tomo"
+              }
+            ]
+          }
+        },
+        {
+          "name": "program_identity",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  100,
+                  101,
+                  110,
+                  116,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "vrf_program",
+          "address": "Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz"
+        },
+        {
+          "name": "slot_hashes",
+          "address": "SysvarS1otHashes111111111111111111111111111"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
@@ -720,6 +1064,19 @@
   ],
   "accounts": [
     {
+      "name": "CrankPayer",
+      "discriminator": [
+        103,
+        143,
+        24,
+        167,
+        216,
+        244,
+        217,
+        32
+      ]
+    },
+    {
       "name": "Tomo",
       "discriminator": [
         104,
@@ -741,6 +1098,21 @@
     }
   ],
   "types": [
+    {
+      "name": "CrankPayer",
+      "docs": [
+        "Placeholder account for crank payer PDA - needs to exist to be delegated"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "initialized",
+            "type": "bool"
+          }
+        ]
+      }
+    },
     {
       "name": "ScheduleCrankArgs",
       "docs": [

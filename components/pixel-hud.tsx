@@ -28,7 +28,7 @@ interface PixelHUDProps {
   lastFed: string
 }
 
-// Coin icon from ui_icons spritesheet (frame 6)
+// Coin icon from ui_icons spritesheet (frame 3)
 function CoinIcon() {
   return (
     <View style={coinStyles.container}>
@@ -37,7 +37,7 @@ function CoinIcon() {
         style={{
           width: UI_ICON_SIZE * 10 * UI_ICON_SCALE,
           height: UI_ICON_SIZE * UI_ICON_SCALE,
-          marginLeft: -UI_ICON_SIZE * UI_ICON_SCALE * 6, // Frame 6 - gold coin (7th)
+          marginLeft: -UI_ICON_SIZE * UI_ICON_SCALE * 3, // Frame 3 - gold coin
         }}
       />
     </View>
