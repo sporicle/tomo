@@ -258,7 +258,8 @@ export type TomoProgram = {
                   116,
                   111,
                   109,
-                  111
+                  111,
+                  49
                 ]
               },
               {
@@ -468,6 +469,34 @@ export type TomoProgram = {
           "writable": true
         },
         {
+          "name": "crankPayer",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  97,
+                  110,
+                  107,
+                  95,
+                  112,
+                  97,
+                  121,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "tomo"
+              }
+            ]
+          }
+        },
+        {
           "name": "owner",
           "writable": true,
           "signer": true,
@@ -542,7 +571,8 @@ export type TomoProgram = {
                   116,
                   111,
                   109,
-                  111
+                  111,
+                  49
                 ]
               },
               {

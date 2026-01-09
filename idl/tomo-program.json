@@ -252,7 +252,8 @@
                   116,
                   111,
                   109,
-                  111
+                  111,
+                  49
                 ]
               },
               {
@@ -462,6 +463,34 @@
           "writable": true
         },
         {
+          "name": "crank_payer",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  97,
+                  110,
+                  107,
+                  95,
+                  112,
+                  97,
+                  121,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "tomo"
+              }
+            ]
+          }
+        },
+        {
           "name": "owner",
           "writable": true,
           "signer": true,
@@ -536,7 +565,8 @@
                   116,
                   111,
                   109,
-                  111
+                  111,
+                  49
                 ]
               },
               {

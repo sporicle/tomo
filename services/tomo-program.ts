@@ -50,7 +50,7 @@ export class TomoProgramService {
    */
   getTomoPDA(uid: string): [PublicKey, number] {
     return PublicKey.findProgramAddressSync(
-      [Buffer.from('tomo'), Buffer.from(uid)],
+      [Buffer.from('tomo1'), Buffer.from(uid)],
       PROGRAM_ID
     )
   }
@@ -274,10 +274,17 @@ export class TomoProgramService {
   }): Promise<Transaction> {
     const [tomoPDA] = this.getTomoPDA(params.uid)
 
+    // Derive crank_payer PDA
+    const [crankPayer] = PublicKey.findProgramAddressSync(
+      [Buffer.from('crank_payer'), tomoPDA.toBuffer()],
+      PROGRAM_ID
+    )
+
     const instruction = await this.program.methods
       .delete()
       .accounts({
         tomo: tomoPDA,
+        crankPayer: crankPayer,
         owner: params.owner,
       })
       .instruction()

@@ -14,7 +14,7 @@ use magicblock_magic_program_api::{args::ScheduleTaskArgs, instruction::MagicBlo
 
 declare_id!("GFAFC6FBpbcCVDrZfY2QyCWS3ckkgJuLMtr9KWtubhiM");
 
-pub const TOMO_SEED: &[u8] = b"tomo";
+pub const TOMO_SEED: &[u8] = b"tomo1";
 
 #[ephemeral]
 #[program]
@@ -417,6 +417,13 @@ pub struct Delete<'info> {
         has_one = owner,
     )]
     pub tomo: Account<'info, Tomo>,
+    #[account(
+        mut,
+        close = owner,
+        seeds = [b"crank_payer", tomo.key().as_ref()],
+        bump
+    )]
+    pub crank_payer: Account<'info, CrankPayer>,
     #[account(mut)]
     pub owner: Signer<'info>,
 }

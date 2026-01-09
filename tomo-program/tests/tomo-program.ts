@@ -53,7 +53,7 @@ describe("tomo-program", () => {
   const uid = `test-${Date.now().toString(36)}`;
 
   const [tomoPda] = anchor.web3.PublicKey.findProgramAddressSync(
-    [Buffer.from("tomo"), Buffer.from(uid)],
+    [Buffer.from("tomo1"), Buffer.from(uid)],
     program.programId
   );
 
@@ -420,7 +420,7 @@ describe("tomo-program - Re-delegation Cycle", () => {
   const uid = `redel-${Date.now().toString(36)}`;
 
   const [tomoPda] = anchor.web3.PublicKey.findProgramAddressSync(
-    [Buffer.from("tomo"), Buffer.from(uid)],
+    [Buffer.from("tomo1"), Buffer.from(uid)],
     program.programId
   );
 
@@ -586,5 +586,161 @@ describe("tomo-program - Re-delegation Cycle", () => {
     console.log("   Final coins:", tomo.coins.toNumber());
     console.log("   Final hunger:", tomo.hunger);
     console.log("\n--- Re-delegation Cycle Complete ---\n");
+  });
+});
+
+// ============================================================
+// TEST SUITE FOR INIT + DELEGATE WITH CRANK_PAYER
+// ============================================================
+
+describe("tomo-program - Init + Delegate with CrankPayer", () => {
+  const provider = anchor.AnchorProvider.env();
+  anchor.setProvider(provider);
+
+  const program = anchor.workspace.tomoProgram as Program<TomoProgram>;
+
+  const providerEphemeralRollup = new anchor.AnchorProvider(
+    new anchor.web3.Connection(
+      process.env.EPHEMERAL_PROVIDER_ENDPOINT ||
+        "https://devnet.magicblock.app/",
+      {
+        wsEndpoint:
+          process.env.EPHEMERAL_WS_ENDPOINT || "wss://devnet.magicblock.app/",
+      }
+    ),
+    anchor.Wallet.local()
+  );
+
+  // New UID for this test suite
+  const uid = `crank-${Date.now().toString(36)}`;
+
+  const [tomoPda] = anchor.web3.PublicKey.findProgramAddressSync(
+    [Buffer.from("tomo1"), Buffer.from(uid)],
+    program.programId
+  );
+
+  const [crankPayerPda] = anchor.web3.PublicKey.findProgramAddressSync(
+    [Buffer.from("crank_payer"), tomoPda.toBuffer()],
+    program.programId
+  );
+
+  console.log("\n--- Init + Delegate with CrankPayer Test ---");
+  console.log("UID:", uid);
+  console.log("Tomo PDA:", tomoPda.toString());
+  console.log("CrankPayer PDA:", crankPayerPda.toString());
+
+  function getDelegateRemainingAccounts(): anchor.web3.AccountMeta[] {
+    const endpoint = providerEphemeralRollup.connection.rpcEndpoint;
+    if (endpoint.includes("localhost") || endpoint.includes("127.0.0.1")) {
+      return [
+        {
+          pubkey: new anchor.web3.PublicKey(
+            "mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev"
+          ),
+          isSigner: false,
+          isWritable: false,
+        },
+      ];
+    }
+    return [];
+  }
+
+  it("initializes tomo and crank_payer", async () => {
+    console.log("\n1. Initializing tomo and crank_payer...");
+
+    try {
+      const tx = await program.methods
+        .init(uid)
+        .accounts({
+          payer: provider.wallet.publicKey,
+          tomo: tomoPda,
+          crankPayer: crankPayerPda,
+        })
+        .rpc();
+
+      console.log("   Init txHash:", tx);
+
+      // Verify tomo account
+      const tomo = await program.account.tomo.fetch(tomoPda);
+      expect(tomo.uid).to.equal(uid);
+      console.log("   Tomo initialized successfully");
+
+      // Verify crank_payer account exists
+      const crankPayerInfo = await provider.connection.getAccountInfo(crankPayerPda);
+      expect(crankPayerInfo).to.not.be.null;
+      console.log("   CrankPayer initialized successfully, data length:", crankPayerInfo.data.length);
+
+    } catch (err) {
+      console.error("   Init failed:", err);
+      throw err;
+    }
+  });
+
+  it("delegates tomo and crank_payer", async () => {
+    console.log("\n2. Delegating tomo and crank_payer...");
+
+    const remainingAccounts = getDelegateRemainingAccounts();
+
+    try {
+      // First, let's see what accounts the delegate instruction expects
+      const instruction = await program.methods
+        .delegate(uid)
+        .accounts({
+          payer: provider.wallet.publicKey,
+          tomo: tomoPda,
+          crankPayer: crankPayerPda,
+        })
+        .remainingAccounts(remainingAccounts)
+        .instruction();
+
+      console.log("   Instruction accounts:");
+      instruction.keys.forEach((key, i) => {
+        console.log(`     ${i}: ${key.pubkey.toString()} (writable: ${key.isWritable}, signer: ${key.isSigner})`);
+      });
+
+      const tx = new anchor.web3.Transaction().add(instruction);
+      tx.feePayer = provider.wallet.publicKey;
+      tx.recentBlockhash = (await provider.connection.getLatestBlockhash()).blockhash;
+
+      // Try to simulate first
+      console.log("\n   Simulating transaction...");
+      try {
+        const simulation = await provider.connection.simulateTransaction(tx);
+        if (simulation.value.err) {
+          console.error("   Simulation error:", simulation.value.err);
+          console.error("   Logs:", simulation.value.logs);
+        } else {
+          console.log("   Simulation successful!");
+          console.log("   Logs:", simulation.value.logs);
+        }
+      } catch (simErr) {
+        console.error("   Simulation threw:", simErr);
+      }
+
+      // Now try to send
+      console.log("\n   Sending transaction...");
+      const txHash = await provider.sendAndConfirm(tx, [], {
+        skipPreflight: true,
+        commitment: "confirmed",
+      });
+
+      console.log("   Delegate txHash:", txHash);
+
+      // Wait and verify delegation
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+
+      const tomoInfo = await provider.connection.getAccountInfo(tomoPda);
+      console.log("   Tomo owner after delegation:", tomoInfo?.owner.toString());
+
+      const crankPayerInfo = await provider.connection.getAccountInfo(crankPayerPda);
+      console.log("   CrankPayer owner after delegation:", crankPayerInfo?.owner.toString());
+
+    } catch (err) {
+      console.error("   Delegate failed:", err);
+      if (err.logs) {
+        console.error("   Logs:", err.logs);
+      }
+      throw err;
+    }
   });
 });

@@ -12,7 +12,7 @@
     ],
     "module": "commonjs",
     "target": "es6",
-    "esModuleInterop": true
-  },
-  "extends": "expo/tsconfig.base"
+    "esModuleInterop": true,
+    "moduleResolution": "node"
+  }
 }

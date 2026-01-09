@@ -7,7 +7,7 @@ import { PixelButton } from '@/components/pixel-button'
 import { UiIconSymbol } from '@/components/ui/ui-icon-symbol'
 import { ellipsify } from '@/utils/ellipsify'
 import React, { useState, useEffect, useCallback } from 'react'
-import { View, Pressable, ActivityIndicator, StyleSheet, ImageBackground, Modal, Image } from 'react-native'
+import { View, Pressable, ActivityIndicator, StyleSheet, ImageBackground, Modal, Image, TextInput } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useFocusEffect } from 'expo-router'
 import NfcManager, { NfcTech } from 'react-native-nfc-manager'
@@ -247,12 +247,59 @@ export default function TabTomoScreen() {
     }
   }
 
+  // Manual UID input state
+  const [manualUid, setManualUid] = useState('')
+  const [showManualInput, setShowManualInput] = useState(false)
+
+  const handleManualUidSubmit = () => {
+    if (manualUid.trim()) {
+      setScannedUid(manualUid.trim())
+      setScreenState('loading')
+      setShowManualInput(false)
+    }
+  }
+
   // Scanning state - centered "scan to play..."
   if (screenState === 'scanning') {
     return (
       <AppView style={{ flex: 1 }}>
         <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <AnimatedEllipsis />
+        </SafeAreaView>
+
+        {/* Manual UID input at bottom */}
+        <SafeAreaView edges={['bottom']} style={scanStyles.manualInputContainer}>
+          {showManualInput ? (
+            <View style={scanStyles.manualInputPanel}>
+              <TextInput
+                style={scanStyles.manualInput}
+                placeholder="Enter UID"
+                placeholderTextColor="#666"
+                value={manualUid}
+                onChangeText={setManualUid}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <View style={scanStyles.manualInputButtons}>
+                <Pressable
+                  style={scanStyles.manualInputButton}
+                  onPress={() => setShowManualInput(false)}
+                >
+                  <AppText style={scanStyles.manualInputButtonText}>Cancel</AppText>
+                </Pressable>
+                <Pressable
+                  style={[scanStyles.manualInputButton, scanStyles.manualInputButtonPrimary]}
+                  onPress={handleManualUidSubmit}
+                >
+                  <AppText style={scanStyles.manualInputButtonText}>Go</AppText>
+                </Pressable>
+              </View>
+            </View>
+          ) : (
+            <Pressable onPress={() => setShowManualInput(true)}>
+              <AppText style={scanStyles.manualInputToggle}>Enter UID manually</AppText>
+            </Pressable>
+          )}
         </SafeAreaView>
       </AppView>
     )
@@ -270,34 +317,24 @@ export default function TabTomoScreen() {
     )
   }
 
-  // Not initialized state - show idle egg animation + "tap to hatch"
+  // Not initialized state - show idle egg animation + hatch button
   if (screenState === 'not_initialized') {
     return (
       <AppView style={{ flex: 1 }}>
         <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', gap: 24 }}>
-          {isProcessingHatch ? (
-            <>
-              <AnimatedSprite
-                source={EGG_SPRITE}
-                frameSize={64}
-                scale={1}
-                animation={EGG_ANIMATIONS.idle}
-              />
-              <ActivityIndicator size="small" />
-            </>
-          ) : (
-            <Pressable onPress={handleHatch} disabled={!publicKey}>
-              <View style={{ alignItems: 'center', gap: 16 }}>
-                <AnimatedSprite
-                  source={EGG_SPRITE}
-                  frameSize={64}
-                  scale={1}
-                  animation={EGG_ANIMATIONS.idle}
-                />
-                <AppText style={{ color: publicKey ? undefined : '#888' }}>tap to hatch</AppText>
-              </View>
-            </Pressable>
-          )}
+          <AnimatedSprite
+            source={EGG_SPRITE}
+            frameSize={64}
+            scale={1}
+            animation={EGG_ANIMATIONS.idle}
+          />
+          <PixelButton
+            title="Hatch"
+            onPress={handleHatch}
+            variant="success"
+            disabled={!publicKey}
+            loading={isProcessingHatch}
+          />
           {!publicKey && (
             <AppText style={{ color: '#888', textAlign: 'center' }}>
               Connect wallet to hatch
@@ -600,5 +637,59 @@ const penguinStyles = StyleSheet.create({
     color: '#888',
     fontSize: 12,
     marginTop: 16,
+  },
+})
+
+const scanStyles = StyleSheet.create({
+  manualInputContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    paddingBottom: 20,
+  },
+  manualInputToggle: {
+    color: '#666',
+    fontSize: 14,
+    textDecorationLine: 'underline',
+  },
+  manualInputPanel: {
+    backgroundColor: '#1a1a2e',
+    borderRadius: 12,
+    padding: 16,
+    marginHorizontal: 20,
+    borderWidth: 2,
+    borderColor: '#3a3a4d',
+    width: '90%',
+    maxWidth: 300,
+  },
+  manualInput: {
+    backgroundColor: '#2a2a3d',
+    borderRadius: 8,
+    padding: 12,
+    color: '#fff',
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: '#4a4a6a',
+    marginBottom: 12,
+  },
+  manualInputButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  manualInputButton: {
+    flex: 1,
+    backgroundColor: '#3a3a4d',
+    borderRadius: 8,
+    padding: 10,
+    alignItems: 'center',
+  },
+  manualInputButtonPrimary: {
+    backgroundColor: '#4a6a9a',
+  },
+  manualInputButtonText: {
+    color: '#fff',
+    fontSize: 14,
   },
 })
