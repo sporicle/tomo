@@ -8,6 +8,47 @@
   },
   "instructions": [
     {
+      "name": "consume_random_event",
+      "docs": [
+        "VRF callback for random event - 20% chance to trigger item drop"
+      ],
+      "discriminator": [
+        4,
+        110,
+        121,
+        176,
+        65,
+        245,
+        224,
+        83
+      ],
+      "accounts": [
+        {
+          "name": "vrf_program_identity",
+          "docs": [
+            "SECURITY: Validates callback is from VRF program"
+          ],
+          "signer": true,
+          "address": "9irBy75QS2BN81FUgXuHcjqceJJRuc9oDkAe8TKVvvAw"
+        },
+        {
+          "name": "tomo",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "randomness",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
       "name": "consume_randomness",
       "docs": [
         "VRF callback - receives randomness and adds item to inventory"
@@ -472,6 +513,122 @@
       ]
     },
     {
+      "name": "random_event",
+      "docs": [
+        "Request a random event using VRF",
+        "The callback will have a 20% chance to trigger an item drop"
+      ],
+      "discriminator": [
+        173,
+        117,
+        20,
+        106,
+        71,
+        75,
+        112,
+        76
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "tomo",
+          "writable": true
+        },
+        {
+          "name": "oracle_queue",
+          "writable": true,
+          "address": "5hBR571xnXppuCPveTrctfTU7tJLSN94nq7kv7FRK5Tc"
+        },
+        {
+          "name": "program_identity",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  100,
+                  101,
+                  110,
+                  116,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "vrf_program",
+          "address": "Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz"
+        },
+        {
+          "name": "slot_hashes",
+          "address": "SysvarS1otHashes111111111111111111111111111"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "client_seed",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "start_random_events",
+      "docs": [
+        "Start random events crank - runs random_event every 1000ms for 10 cycles"
+      ],
+      "discriminator": [
+        198,
+        253,
+        210,
+        132,
+        250,
+        194,
+        138,
+        18
+      ],
+      "accounts": [
+        {
+          "name": "magic_program",
+          "address": "Magic11111111111111111111111111111111111111"
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "tomo",
+          "writable": true
+        },
+        {
+          "name": "oracle_queue",
+          "address": "5hBR571xnXppuCPveTrctfTU7tJLSN94nq7kv7FRK5Tc"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "ScheduleCrankArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "trigger_item_drop",
       "docs": [
         "Trigger an item drop - sets item_drop to true if false"
@@ -584,6 +741,29 @@
     }
   ],
   "types": [
+    {
+      "name": "ScheduleCrankArgs",
+      "docs": [
+        "Arguments for scheduling a crank"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "task_id",
+            "type": "u64"
+          },
+          {
+            "name": "execution_interval_millis",
+            "type": "u64"
+          },
+          {
+            "name": "iterations",
+            "type": "u64"
+          }
+        ]
+      }
+    },
     {
       "name": "Tomo",
       "type": {

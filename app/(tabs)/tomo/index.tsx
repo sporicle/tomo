@@ -27,6 +27,11 @@ import { useTomoSession } from '@/components/tomo-session-provider'
 const EGG_SPRITE = require('@/assets/images/egg.png')
 const BG_IMAGE = require('@/assets/images/bg.jpg')
 const ITEMS_SPRITE = require('@/assets/images/items.png')
+const UI_ICONS = require('@/assets/images/ui_icons.png')
+
+// UI icon constants (64x64 sprites)
+const UI_ICON_SIZE = 64
+const UI_ICON_SCALE = 0.7
 
 // Item sprite constants
 const ITEM_SIZE = 64
@@ -361,13 +366,13 @@ export default function TabTomoScreen() {
           onPress={() => setShowInventory(true)}
           style={penguinStyles.inventoryButton}
         >
-          <View style={penguinStyles.inventoryIconContainer}>
+          <View style={penguinStyles.uiIconContainer}>
             <Image
-              source={ITEMS_SPRITE}
+              source={UI_ICONS}
               style={{
-                width: ITEM_SIZE * 10 * 0.4,
-                height: ITEM_SIZE * 0.4,
-                marginLeft: -ITEM_SIZE * 0.4 * 2, // Show item at index 2 (third item)
+                width: UI_ICON_SIZE * 10 * UI_ICON_SCALE,
+                height: UI_ICON_SIZE * UI_ICON_SCALE,
+                marginLeft: -UI_ICON_SIZE * UI_ICON_SCALE * 4, // Frame 4 - inventory bag (5th)
               }}
             />
           </View>
@@ -380,7 +385,16 @@ export default function TabTomoScreen() {
           onPress={() => setShowDebugPanel(true)}
           style={penguinStyles.settingsButton}
         >
-          <UiIconSymbol name="gearshape.fill" size={24} color="#fff" />
+          <View style={penguinStyles.uiIconContainer}>
+            <Image
+              source={UI_ICONS}
+              style={{
+                width: UI_ICON_SIZE * 10 * UI_ICON_SCALE,
+                height: UI_ICON_SIZE * UI_ICON_SCALE,
+                marginLeft: -UI_ICON_SIZE * UI_ICON_SCALE * 5, // Frame 5 - settings wheel (6th)
+              }}
+            />
+          </View>
         </Pressable>
       </SafeAreaView>
 
@@ -503,11 +517,11 @@ const penguinStyles = StyleSheet.create({
   },
   settingsButtonContainer: {
     position: 'absolute',
-    top: 0,
+    top: 20,
     right: 0,
   },
   settingsButton: {
-    padding: 12,
+    padding: 8,
     marginRight: 8,
   },
   modalOverlay: {
@@ -531,23 +545,17 @@ const penguinStyles = StyleSheet.create({
   },
   inventoryButtonContainer: {
     position: 'absolute',
-    top: 85, // Below HUD
+    top: 20,
     left: 0,
   },
   inventoryButton: {
     padding: 8,
     marginLeft: 8,
   },
-  inventoryIconContainer: {
-    width: ITEM_SLOT_SIZE * 0.6,
-    height: ITEM_SLOT_SIZE * 0.6,
+  uiIconContainer: {
+    width: UI_ICON_SIZE * UI_ICON_SCALE,
+    height: UI_ICON_SIZE * UI_ICON_SCALE,
     overflow: 'hidden',
-    backgroundColor: '#2a2a3d',
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: '#4a4a6a',
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   inventoryPanel: {
     backgroundColor: '#1a1a2e',

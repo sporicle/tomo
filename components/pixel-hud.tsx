@@ -1,5 +1,9 @@
 import React from 'react'
-import { View, StyleSheet, Text } from 'react-native'
+import { View, StyleSheet, Text, Image } from 'react-native'
+
+const UI_ICONS = require('@/assets/images/ui_icons.png')
+const UI_ICON_SIZE = 64
+const UI_ICON_SCALE = 0.3
 
 // Pixel art color palette - warm retro tones
 const COLORS = {
@@ -24,47 +28,27 @@ interface PixelHUDProps {
   lastFed: string
 }
 
-// Pixel-art styled coin icon using views
+// Coin icon from ui_icons spritesheet (frame 6)
 function CoinIcon() {
   return (
     <View style={coinStyles.container}>
-      <View style={coinStyles.outer}>
-        <View style={coinStyles.inner}>
-          <Text style={coinStyles.symbol}>$</Text>
-        </View>
-      </View>
+      <Image
+        source={UI_ICONS}
+        style={{
+          width: UI_ICON_SIZE * 10 * UI_ICON_SCALE,
+          height: UI_ICON_SIZE * UI_ICON_SCALE,
+          marginLeft: -UI_ICON_SIZE * UI_ICON_SCALE * 6, // Frame 6 - gold coin (7th)
+        }}
+      />
     </View>
   )
 }
 
 const coinStyles = StyleSheet.create({
   container: {
-    width: 20,
-    height: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  outer: {
-    width: 18,
-    height: 18,
-    backgroundColor: COLORS.coinDark,
-    borderRadius: 9,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  inner: {
-    width: 14,
-    height: 14,
-    backgroundColor: COLORS.coin,
-    borderRadius: 7,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  symbol: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    color: COLORS.coinDark,
-    marginTop: -1,
+    width: UI_ICON_SIZE * UI_ICON_SCALE,
+    height: UI_ICON_SIZE * UI_ICON_SCALE,
+    overflow: 'hidden',
   },
 })
 

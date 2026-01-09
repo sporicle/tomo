@@ -368,3 +368,75 @@ export function useUseItem() {
     },
   })
 }
+
+/**
+ * Hook to trigger a random event using VRF.
+ * Has 20% chance to trigger an item drop.
+ * NOTE: This uses the ephemeral rollup connection for VRF.
+ */
+export function useRandomEvent() {
+  const { connection } = useTomoProgram()
+  const { publicKey: embeddedPublicKey, initialize: initializeEmbeddedWallet } = useEmbeddedWallet()
+  const { executeTransaction, erConnection } = useEmbeddedTransaction()
+  const invalidate = useTomoAccountInvalidate()
+
+  // Create program service with ER connection for VRF
+  const erProgramService = useMemo(() => {
+    return new TomoProgramService(erConnection)
+  }, [erConnection])
+
+  return useMutation({
+    mutationKey: ['random-event', { endpoint: connection.rpcEndpoint }],
+    mutationFn: async (uid: string) => {
+      let payer = embeddedPublicKey
+      if (!payer) {
+        const keypair = await initializeEmbeddedWallet()
+        payer = keypair.publicKey
+      }
+
+      // VRF requests must go to the ephemeral rollup
+      const tx = await erProgramService.buildRandomEventTx({ payer, uid })
+      const signature = await executeTransaction(tx)
+      return signature
+    },
+    onSuccess: async (_data, uid) => {
+      await invalidate(uid)
+    },
+  })
+}
+
+/**
+ * Hook to start random events crank.
+ * Schedules randomEvent to run every 1000ms for 10 cycles.
+ * NOTE: This uses the ephemeral rollup connection.
+ */
+export function useStartRandomEvents() {
+  const { connection } = useTomoProgram()
+  const { publicKey: embeddedPublicKey, initialize: initializeEmbeddedWallet } = useEmbeddedWallet()
+  const { executeTransaction, erConnection } = useEmbeddedTransaction()
+  const invalidate = useTomoAccountInvalidate()
+
+  // Create program service with ER connection for crank scheduling
+  const erProgramService = useMemo(() => {
+    return new TomoProgramService(erConnection)
+  }, [erConnection])
+
+  return useMutation({
+    mutationKey: ['start-random-events', { endpoint: connection.rpcEndpoint }],
+    mutationFn: async (uid: string) => {
+      let payer = embeddedPublicKey
+      if (!payer) {
+        const keypair = await initializeEmbeddedWallet()
+        payer = keypair.publicKey
+      }
+
+      // Crank scheduling must go to the ephemeral rollup
+      const tx = await erProgramService.buildStartRandomEventsTx({ payer, uid })
+      const signature = await executeTransaction(tx)
+      return signature
+    },
+    onSuccess: async (_data, uid) => {
+      await invalidate(uid)
+    },
+  })
+}

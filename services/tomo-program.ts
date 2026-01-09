@@ -7,6 +7,7 @@ const PROGRAM_ID = new PublicKey(AppConfig.tomoProgramId)
 const DELEGATION_PROGRAM_ID = new PublicKey('DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh')
 const MAGIC_PROGRAM_ID = new PublicKey('Magic11111111111111111111111111111111111111')
 const MAGIC_CONTEXT_ID = new PublicKey('MagicContext1111111111111111111111111111111')
+const EPHEMERAL_ORACLE_QUEUE = new PublicKey('5hBR571xnXppuCPveTrctfTU7tJLSN94nq7kv7FRK5Tc')
 
 export interface TomoAccount {
   owner: PublicKey
@@ -323,6 +324,69 @@ export class TomoProgramService {
       .useItem(params.index)
       .accounts({
         tomo: tomoPDA,
+      })
+      .instruction()
+
+    const tx = new Transaction()
+    tx.add(instruction)
+    tx.feePayer = params.payer
+
+    return tx
+  }
+
+  /**
+   * Build randomEvent transaction
+   * Uses VRF to generate a random event with 20% chance to trigger item drop
+   * NOTE: This transaction should be sent to the EPHEMERAL ROLLUP
+   */
+  async buildRandomEventTx(params: {
+    payer: PublicKey
+    uid: string
+    clientSeed?: number
+  }): Promise<Transaction> {
+    const [tomoPDA] = this.getTomoPDA(params.uid)
+    const clientSeed = params.clientSeed ?? Math.floor(Math.random() * 256)
+
+    const instruction = await this.program.methods
+      .randomEvent(clientSeed)
+      .accounts({
+        payer: params.payer,
+        tomo: tomoPDA,
+      })
+      .instruction()
+
+    const tx = new Transaction()
+    tx.add(instruction)
+    tx.feePayer = params.payer
+
+    return tx
+  }
+
+  /**
+   * Build startRandomEvents transaction
+   * Schedules a crank to run randomEvent every 1000ms for 10 cycles
+   * NOTE: This transaction should be sent to the EPHEMERAL ROLLUP
+   */
+  async buildStartRandomEventsTx(params: {
+    payer: PublicKey
+    uid: string
+    taskId?: number
+    intervalMs?: number
+    iterations?: number
+  }): Promise<Transaction> {
+    const [tomoPDA] = this.getTomoPDA(params.uid)
+
+    const instruction = await this.program.methods
+      .startRandomEvents({
+        taskId: new BN(params.taskId ?? Date.now()),
+        executionIntervalMillis: new BN(params.intervalMs ?? 1000),
+        iterations: new BN(params.iterations ?? 10),
+      })
+      .accounts({
+        magicProgram: MAGIC_PROGRAM_ID,
+        payer: params.payer,
+        tomo: tomoPDA,
+        oracleQueue: EPHEMERAL_ORACLE_QUEUE,
       })
       .instruction()
 

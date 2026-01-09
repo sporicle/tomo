@@ -21,6 +21,8 @@ import {
   useTriggerItemDrop,
   useOpenItemDrop,
   useUseItem,
+  useRandomEvent,
+  useStartRandomEvents,
 } from './use-tomo-program'
 
 function formatTimestamp(timestamp: number): string {
@@ -213,6 +215,8 @@ export function DemoFeatureTomo({ uid, setUid }: DemoFeatureTomoProps) {
   const triggerItemDrop = useTriggerItemDrop()
   const openItemDrop = useOpenItemDrop()
   const useItem = useUseItem()
+  const randomEvent = useRandomEvent()
+  const startRandomEvents = useStartRandomEvents()
 
   const tomo = tomoQuery.data
   const pda = activeUid ? getTomoPDA(activeUid) : null
@@ -227,7 +231,9 @@ export function DemoFeatureTomo({ uid, setUid }: DemoFeatureTomoProps) {
     deleteTomo.isPending ||
     triggerItemDrop.isPending ||
     openItemDrop.isPending ||
-    useItem.isPending
+    useItem.isPending ||
+    randomEvent.isPending ||
+    startRandomEvents.isPending
   const coins = tomo?.coins?.toNumber() ?? 0
   const canFeed = coins >= 10
   const isDelegated = tomo?.isDelegated ?? false
@@ -394,6 +400,38 @@ export function DemoFeatureTomo({ uid, setUid }: DemoFeatureTomoProps) {
       })
       .catch((err) => {
         console.error('Use item error:', err)
+        Snackbar.show({ text: `Error: ${err.message}`, duration: Snackbar.LENGTH_LONG })
+      })
+  }
+
+  const handleRandomEvent = () => {
+    if (!activeUid) return
+    randomEvent
+      .mutateAsync(activeUid)
+      .then((sig) => {
+        Snackbar.show({
+          text: `Random event triggered! ${ellipsify(sig, 8)}`,
+          duration: Snackbar.LENGTH_SHORT,
+        })
+      })
+      .catch((err) => {
+        console.error('Random event error:', err)
+        Snackbar.show({ text: `Error: ${err.message}`, duration: Snackbar.LENGTH_LONG })
+      })
+  }
+
+  const handleStartRandomEvents = () => {
+    if (!activeUid) return
+    startRandomEvents
+      .mutateAsync(activeUid)
+      .then((sig) => {
+        Snackbar.show({
+          text: `Random events crank started! ${ellipsify(sig, 8)}`,
+          duration: Snackbar.LENGTH_SHORT,
+        })
+      })
+      .catch((err) => {
+        console.error('Start random events error:', err)
         Snackbar.show({ text: `Error: ${err.message}`, duration: Snackbar.LENGTH_LONG })
       })
   }
@@ -619,6 +657,36 @@ export function DemoFeatureTomo({ uid, setUid }: DemoFeatureTomoProps) {
           )}
 
           <View style={{ marginTop: 8 }}>
+            <AppText type="defaultSemiBold">Random Events</AppText>
+            <AppText style={{ color: '#666', fontSize: 12 }}>
+              {isDelegated ? '20% chance to trigger item drop' : 'Delegate first for VRF'}
+            </AppText>
+          </View>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            {isLoading ? (
+              <ActivityIndicator style={{ flex: 1 }} />
+            ) : (
+              <>
+                <View style={{ flex: 1 }}>
+                  <Button onPress={handleRandomEvent} disabled={!isDelegated} variant="tinted">
+                    Random Event
+                  </Button>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Button onPress={handleStartRandomEvents} disabled={!isDelegated} variant="filled">
+                    Start Crank
+                  </Button>
+                </View>
+              </>
+            )}
+          </View>
+          {!isDelegated && (
+            <AppText style={{ color: '#888', fontSize: 12 }}>
+              Delegate first to use random events (requires VRF on ER)
+            </AppText>
+          )}
+
+          <View style={{ marginTop: 8 }}>
             <AppText type="defaultSemiBold">Delegation</AppText>
             <AppText style={{ color: '#666', fontSize: 12 }}>Requires wallet signature</AppText>
           </View>
@@ -680,7 +748,9 @@ export function DemoFeatureTomo({ uid, setUid }: DemoFeatureTomoProps) {
         deleteTomo.isError ||
         triggerItemDrop.isError ||
         openItemDrop.isError ||
-        useItem.isError) && (
+        useItem.isError ||
+        randomEvent.isError ||
+        startRandomEvents.isError) && (
         <AppText style={{ color: '#F44336', fontSize: 12, marginTop: 8 }}>
           {initTomo.error?.message ||
             initAndDelegate.error?.message ||
@@ -691,7 +761,9 @@ export function DemoFeatureTomo({ uid, setUid }: DemoFeatureTomoProps) {
             deleteTomo.error?.message ||
             triggerItemDrop.error?.message ||
             openItemDrop.error?.message ||
-            useItem.error?.message}
+            useItem.error?.message ||
+            randomEvent.error?.message ||
+            startRandomEvents.error?.message}
         </AppText>
       )}
     </AppView>

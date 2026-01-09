@@ -1,10 +1,16 @@
 use anchor_lang::prelude::*;
+use anchor_lang::solana_program::{
+    instruction::{AccountMeta, Instruction},
+    program::invoke_signed,
+};
 use ephemeral_rollups_sdk::anchor::{commit, delegate, ephemeral};
+use ephemeral_rollups_sdk::consts::MAGIC_PROGRAM_ID;
 use ephemeral_rollups_sdk::cpi::DelegateConfig;
 use ephemeral_rollups_sdk::ephem::commit_and_undelegate_accounts;
 use ephemeral_vrf_sdk::anchor::vrf;
 use ephemeral_vrf_sdk::instructions::{create_request_randomness_ix, RequestRandomnessParams};
 use ephemeral_vrf_sdk::types::SerializableAccountMeta;
+use magicblock_magic_program_api::{args::ScheduleTaskArgs, instruction::MagicBlockInstruction};
 
 declare_id!("GFAFC6FBpbcCVDrZfY2QyCWS3ckkgJuLMtr9KWtubhiM");
 
@@ -160,6 +166,114 @@ pub mod tomo_program {
 
         Ok(())
     }
+
+    /// Request a random event using VRF
+    /// The callback will have a 20% chance to trigger an item drop
+    pub fn random_event(ctx: Context<RandomEvent>, client_seed: u8) -> Result<()> {
+        msg!("Requesting randomness for random event...");
+
+        let ix = create_request_randomness_ix(RequestRandomnessParams {
+            payer: ctx.accounts.payer.key(),
+            oracle_queue: ctx.accounts.oracle_queue.key(),
+            callback_program_id: crate::ID,
+            callback_discriminator: crate::instruction::ConsumeRandomEvent::DISCRIMINATOR.to_vec(),
+            caller_seed: [client_seed; 32],
+            accounts_metas: Some(vec![SerializableAccountMeta {
+                pubkey: ctx.accounts.tomo.key(),
+                is_signer: false,
+                is_writable: true,
+            }]),
+            ..Default::default()
+        });
+
+        ctx.accounts.invoke_signed_vrf(&ctx.accounts.payer.to_account_info(), &ix)?;
+        Ok(())
+    }
+
+    /// VRF callback for random event - 20% chance to trigger item drop
+    pub fn consume_random_event(ctx: Context<ConsumeRandomEvent>, randomness: [u8; 32]) -> Result<()> {
+        let tomo = &mut ctx.accounts.tomo;
+
+        // Generate random value 1-100 using VRF SDK helper
+        let random_value = ephemeral_vrf_sdk::rnd::random_u8_with_range(&randomness, 1, 100);
+        msg!("Random event value: {}", random_value);
+
+        // 20% chance (1-20 out of 1-100) to trigger item drop
+        if random_value <= 20 {
+            if !tomo.item_drop {
+                tomo.item_drop = true;
+                msg!("Item drop triggered by random event!");
+            } else {
+                msg!("Item drop already available, skipping");
+            }
+        } else {
+            msg!("No event triggered (rolled {})", random_value);
+        }
+
+        Ok(())
+    }
+
+    /// Start random events crank - runs random_event every 1000ms for 10 cycles
+    pub fn start_random_events(ctx: Context<StartRandomEvents>, args: ScheduleCrankArgs) -> Result<()> {
+        msg!("Scheduling random events crank...");
+
+        // Build the instruction to be executed by the crank (random_event)
+        // We need to pass a client_seed - use a constant for crank calls
+        let crank_ix = Instruction {
+            program_id: crate::ID,
+            accounts: vec![
+                AccountMeta::new(ctx.accounts.payer.key(), true),
+                AccountMeta::new(ctx.accounts.tomo.key(), false),
+                AccountMeta::new(ctx.accounts.oracle_queue.key(), false),
+                // program_identity PDA - derived from "identity" seed
+                AccountMeta::new_readonly(
+                    anchor_lang::prelude::Pubkey::find_program_address(&[b"identity"], &crate::ID).0,
+                    false,
+                ),
+                AccountMeta::new_readonly(ephemeral_vrf_sdk::consts::VRF_PROGRAM_ID, false),
+                AccountMeta::new_readonly(anchor_lang::solana_program::sysvar::slot_hashes::ID, false),
+                AccountMeta::new_readonly(anchor_lang::solana_program::system_program::ID, false),
+            ],
+            data: anchor_lang::InstructionData::data(&crate::instruction::RandomEvent {
+                client_seed: 42, // Fixed seed for crank calls
+            }),
+        };
+
+        // Serialize the ScheduleTask instruction
+        let ix_data = bincode::serialize(&MagicBlockInstruction::ScheduleTask(ScheduleTaskArgs {
+            task_id: args.task_id,
+            execution_interval_millis: args.execution_interval_millis,
+            iterations: args.iterations,
+            instructions: vec![crank_ix],
+        }))
+        .map_err(|err| {
+            msg!("ERROR: failed to serialize args {:?}", err);
+            anchor_lang::solana_program::program_error::ProgramError::InvalidArgument
+        })?;
+
+        // Create CPI instruction to Magic Program
+        let schedule_ix = Instruction::new_with_bytes(
+            MAGIC_PROGRAM_ID,
+            &ix_data,
+            vec![
+                AccountMeta::new(ctx.accounts.payer.key(), true),
+                AccountMeta::new(ctx.accounts.tomo.key(), false),
+            ],
+        );
+
+        // Execute CPI to schedule the task
+        invoke_signed(
+            &schedule_ix,
+            &[
+                ctx.accounts.payer.to_account_info(),
+                ctx.accounts.tomo.to_account_info(),
+            ],
+            &[],
+        )?;
+
+        msg!("Random events crank scheduled successfully!");
+        Ok(())
+    }
 }
 
 #[derive(Accounts)]
@@ -253,6 +367,50 @@ pub struct ConsumeRandomness<'info> {
 pub struct UseItem<'info> {
     #[account(mut)]
     pub tomo: Account<'info, Tomo>,
+}
+
+#[vrf]
+#[derive(Accounts)]
+pub struct RandomEvent<'info> {
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    #[account(mut)]
+    pub tomo: Account<'info, Tomo>,
+    /// CHECK: Oracle queue for VRF
+    #[account(mut, address = ephemeral_vrf_sdk::consts::DEFAULT_EPHEMERAL_QUEUE)]
+    pub oracle_queue: AccountInfo<'info>,
+}
+
+#[derive(Accounts)]
+pub struct ConsumeRandomEvent<'info> {
+    /// SECURITY: Validates callback is from VRF program
+    #[account(address = ephemeral_vrf_sdk::consts::VRF_PROGRAM_IDENTITY)]
+    pub vrf_program_identity: Signer<'info>,
+    #[account(mut)]
+    pub tomo: Account<'info, Tomo>,
+}
+
+#[derive(Accounts)]
+pub struct StartRandomEvents<'info> {
+    /// CHECK: Magic program for crank scheduling
+    #[account(address = MAGIC_PROGRAM_ID)]
+    pub magic_program: AccountInfo<'info>,
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    /// CHECK: Use AccountInfo to avoid Anchor re-serialization after CPI
+    #[account(mut)]
+    pub tomo: AccountInfo<'info>,
+    /// CHECK: Oracle queue for VRF (needed for the scheduled random_event calls)
+    #[account(address = ephemeral_vrf_sdk::consts::DEFAULT_EPHEMERAL_QUEUE)]
+    pub oracle_queue: AccountInfo<'info>,
+}
+
+/// Arguments for scheduling a crank
+#[derive(AnchorSerialize, AnchorDeserialize)]
+pub struct ScheduleCrankArgs {
+    pub task_id: u64,
+    pub execution_interval_millis: u64,
+    pub iterations: u64,
 }
 
 #[account]
