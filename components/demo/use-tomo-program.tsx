@@ -1,11 +1,12 @@
-import { useMemo } from 'react'
+import { useMemo, useCallback } from 'react'
 import { Connection, PublicKey } from '@solana/web3.js'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useMobileWallet } from '@wallet-ui/react-native-web3js'
 import { TomoProgramService, TomoAccount, TomoAccountWithDelegation } from '@/services/tomo-program'
 import { useTransaction } from '@/hooks/use-transaction'
 import { useEmbeddedWallet } from '@/hooks/use-embedded-wallet'
-import { useEmbeddedTransaction } from '@/hooks/use-embedded-transaction'
+import { useEmbeddedTransaction, TransactionCallbacks } from '@/hooks/use-embedded-transaction'
+import { useTransactionToast } from '@/components/transaction-toast-provider'
 
 export { TomoAccount, TomoAccountWithDelegation }
 
@@ -99,6 +100,44 @@ export function useTomoAccountInvalidate() {
   }
 }
 
+/**
+ * Helper hook that provides common utilities for embedded wallet transactions.
+ * Returns the payer public key (initializing wallet if needed) and toast callbacks.
+ */
+function useEmbeddedWalletHelpers() {
+  const { publicKey: embeddedPublicKey, initialize: initializeEmbeddedWallet } = useEmbeddedWallet()
+  const { addToast, confirmToast, failToast } = useTransactionToast()
+
+  const getOrInitializePayer = useCallback(async (): Promise<PublicKey> => {
+    if (embeddedPublicKey) return embeddedPublicKey
+    const keypair = await initializeEmbeddedWallet()
+    return keypair.publicKey
+  }, [embeddedPublicKey, initializeEmbeddedWallet])
+
+  const createToastCallbacks = useCallback((): {
+    callbacks: TransactionCallbacks
+    toastIdRef: { current: string | undefined }
+  } => {
+    const toastIdRef = { current: undefined as string | undefined }
+    return {
+      toastIdRef,
+      callbacks: {
+        onSent: (sig: string) => {
+          toastIdRef.current = addToast(sig)
+        },
+        onConfirmed: () => {
+          if (toastIdRef.current) confirmToast(toastIdRef.current)
+        },
+        onError: () => {
+          if (toastIdRef.current) failToast(toastIdRef.current)
+        },
+      },
+    }
+  }, [addToast, confirmToast, failToast])
+
+  return { getOrInitializePayer, createToastCallbacks }
+}
+
 export function useInitTomo() {
   const { programService, connection, getAccountPublicKey, executeTransaction } = useTomoProgram()
   const invalidate = useTomoAccountInvalidate()
@@ -141,23 +180,17 @@ export function useInitAndDelegate() {
  */
 export function useGetCoin() {
   const { programService, connection } = useTomoProgram()
-  const { publicKey: embeddedPublicKey, initialize: initializeEmbeddedWallet } = useEmbeddedWallet()
   const { executeTransaction } = useEmbeddedTransaction()
   const invalidate = useTomoAccountInvalidate()
+  const { getOrInitializePayer, createToastCallbacks } = useEmbeddedWalletHelpers()
 
   return useMutation({
     mutationKey: ['get-coin', { endpoint: connection.rpcEndpoint }],
     mutationFn: async (uid: string) => {
-      // Initialize embedded wallet if not already done
-      let payer = embeddedPublicKey
-      if (!payer) {
-        const keypair = await initializeEmbeddedWallet()
-        payer = keypair.publicKey
-      }
-
+      const payer = await getOrInitializePayer()
       const tx = await programService.buildGetCoinTx({ payer, uid })
-      const signature = await executeTransaction(tx)
-      return signature
+      const { callbacks } = createToastCallbacks()
+      return executeTransaction(tx, callbacks)
     },
     onSuccess: async (_data, uid) => {
       await invalidate(uid)
@@ -171,23 +204,17 @@ export function useGetCoin() {
  */
 export function useFeed() {
   const { programService, connection } = useTomoProgram()
-  const { publicKey: embeddedPublicKey, initialize: initializeEmbeddedWallet } = useEmbeddedWallet()
   const { executeTransaction } = useEmbeddedTransaction()
   const invalidate = useTomoAccountInvalidate()
+  const { getOrInitializePayer, createToastCallbacks } = useEmbeddedWalletHelpers()
 
   return useMutation({
     mutationKey: ['feed', { endpoint: connection.rpcEndpoint }],
     mutationFn: async (uid: string) => {
-      // Initialize embedded wallet if not already done
-      let payer = embeddedPublicKey
-      if (!payer) {
-        const keypair = await initializeEmbeddedWallet()
-        payer = keypair.publicKey
-      }
-
+      const payer = await getOrInitializePayer()
       const tx = await programService.buildFeedTx({ payer, uid })
-      const signature = await executeTransaction(tx)
-      return signature
+      const { callbacks } = createToastCallbacks()
+      return executeTransaction(tx, callbacks)
     },
     onSuccess: async (_data, uid) => {
       await invalidate(uid)
@@ -281,22 +308,17 @@ export function useDeleteTomo() {
  */
 export function useTriggerItemDrop() {
   const { programService, connection } = useTomoProgram()
-  const { publicKey: embeddedPublicKey, initialize: initializeEmbeddedWallet } = useEmbeddedWallet()
   const { executeTransaction } = useEmbeddedTransaction()
   const invalidate = useTomoAccountInvalidate()
+  const { getOrInitializePayer, createToastCallbacks } = useEmbeddedWalletHelpers()
 
   return useMutation({
     mutationKey: ['trigger-item-drop', { endpoint: connection.rpcEndpoint }],
     mutationFn: async (uid: string) => {
-      let payer = embeddedPublicKey
-      if (!payer) {
-        const keypair = await initializeEmbeddedWallet()
-        payer = keypair.publicKey
-      }
-
+      const payer = await getOrInitializePayer()
       const tx = await programService.buildTriggerItemDropTx({ payer, uid })
-      const signature = await executeTransaction(tx)
-      return signature
+      const { callbacks } = createToastCallbacks()
+      return executeTransaction(tx, callbacks)
     },
     onSuccess: async (_data, uid) => {
       await invalidate(uid)
@@ -311,9 +333,9 @@ export function useTriggerItemDrop() {
  */
 export function useOpenItemDrop() {
   const { connection } = useTomoProgram()
-  const { publicKey: embeddedPublicKey, initialize: initializeEmbeddedWallet } = useEmbeddedWallet()
   const { executeTransaction, erConnection } = useEmbeddedTransaction()
   const invalidate = useTomoAccountInvalidate()
+  const { getOrInitializePayer, createToastCallbacks } = useEmbeddedWalletHelpers()
 
   // Create program service with ER connection for VRF
   const erProgramService = useMemo(() => {
@@ -323,16 +345,11 @@ export function useOpenItemDrop() {
   return useMutation({
     mutationKey: ['open-item-drop', { endpoint: connection.rpcEndpoint }],
     mutationFn: async (uid: string) => {
-      let payer = embeddedPublicKey
-      if (!payer) {
-        const keypair = await initializeEmbeddedWallet()
-        payer = keypair.publicKey
-      }
-
+      const payer = await getOrInitializePayer()
       // VRF requests must go to the ephemeral rollup
       const tx = await erProgramService.buildOpenItemDropTx({ payer, uid })
-      const signature = await executeTransaction(tx)
-      return signature
+      const { callbacks } = createToastCallbacks()
+      return executeTransaction(tx, callbacks)
     },
     onSuccess: async (_data, uid) => {
       await invalidate(uid)
@@ -346,22 +363,17 @@ export function useOpenItemDrop() {
  */
 export function useUseItem() {
   const { programService, connection } = useTomoProgram()
-  const { publicKey: embeddedPublicKey, initialize: initializeEmbeddedWallet } = useEmbeddedWallet()
   const { executeTransaction } = useEmbeddedTransaction()
   const invalidate = useTomoAccountInvalidate()
+  const { getOrInitializePayer, createToastCallbacks } = useEmbeddedWalletHelpers()
 
   return useMutation({
     mutationKey: ['use-item', { endpoint: connection.rpcEndpoint }],
     mutationFn: async ({ uid, index }: { uid: string; index: number }) => {
-      let payer = embeddedPublicKey
-      if (!payer) {
-        const keypair = await initializeEmbeddedWallet()
-        payer = keypair.publicKey
-      }
-
+      const payer = await getOrInitializePayer()
       const tx = await programService.buildUseItemTx({ payer, uid, index })
-      const signature = await executeTransaction(tx)
-      return signature
+      const { callbacks } = createToastCallbacks()
+      return executeTransaction(tx, callbacks)
     },
     onSuccess: async (_data, { uid }) => {
       await invalidate(uid)
@@ -376,9 +388,9 @@ export function useUseItem() {
  */
 export function useRandomEvent() {
   const { connection } = useTomoProgram()
-  const { publicKey: embeddedPublicKey, initialize: initializeEmbeddedWallet } = useEmbeddedWallet()
   const { executeTransaction, erConnection } = useEmbeddedTransaction()
   const invalidate = useTomoAccountInvalidate()
+  const { getOrInitializePayer } = useEmbeddedWalletHelpers()
 
   // Create program service with ER connection for VRF
   const erProgramService = useMemo(() => {
@@ -388,16 +400,10 @@ export function useRandomEvent() {
   return useMutation({
     mutationKey: ['random-event', { endpoint: connection.rpcEndpoint }],
     mutationFn: async (uid: string) => {
-      let payer = embeddedPublicKey
-      if (!payer) {
-        const keypair = await initializeEmbeddedWallet()
-        payer = keypair.publicKey
-      }
-
+      const payer = await getOrInitializePayer()
       // VRF requests must go to the ephemeral rollup
       const tx = await erProgramService.buildRandomEventTx({ payer, uid })
-      const signature = await executeTransaction(tx)
-      return signature
+      return executeTransaction(tx)
     },
     onSuccess: async (_data, uid) => {
       await invalidate(uid)
@@ -412,9 +418,9 @@ export function useRandomEvent() {
  */
 export function useStartRandomEvents() {
   const { connection } = useTomoProgram()
-  const { publicKey: embeddedPublicKey, initialize: initializeEmbeddedWallet } = useEmbeddedWallet()
   const { executeTransaction, erConnection } = useEmbeddedTransaction()
   const invalidate = useTomoAccountInvalidate()
+  const { getOrInitializePayer } = useEmbeddedWalletHelpers()
 
   // Create program service with ER connection for crank scheduling
   const erProgramService = useMemo(() => {
@@ -424,16 +430,10 @@ export function useStartRandomEvents() {
   return useMutation({
     mutationKey: ['start-random-events', { endpoint: connection.rpcEndpoint }],
     mutationFn: async (uid: string) => {
-      let payer = embeddedPublicKey
-      if (!payer) {
-        const keypair = await initializeEmbeddedWallet()
-        payer = keypair.publicKey
-      }
-
+      const payer = await getOrInitializePayer()
       // Crank scheduling must go to the ephemeral rollup
       const tx = await erProgramService.buildStartRandomEventsTx({ payer, uid })
-      const signature = await executeTransaction(tx)
-      return signature
+      return executeTransaction(tx)
     },
     onSuccess: async (_data, uid) => {
       await invalidate(uid)

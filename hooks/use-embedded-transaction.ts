@@ -5,6 +5,12 @@ import { useEmbeddedWallet } from './use-embedded-wallet'
 // MagicBlock Ephemeral Rollup endpoint for devnet
 const EPHEMERAL_ROLLUP_ENDPOINT = 'https://devnet.magicblock.app/'
 
+export interface TransactionCallbacks {
+  onSent?: (signature: string) => void
+  onConfirmed?: (signature: string) => void
+  onError?: (error: Error, signature?: string) => void
+}
+
 /**
  * Hook for executing transactions signed with the embedded wallet.
  * Uses the MagicBlock Ephemeral Rollup for gasless transactions.
@@ -23,9 +29,11 @@ export function useEmbeddedTransaction() {
   }, [])
 
   const executeTransaction = useCallback(
-    async (transaction: Transaction): Promise<string> => {
+    async (transaction: Transaction, callbacks?: TransactionCallbacks): Promise<string> => {
       setIsLoading(true)
       setError(null)
+
+      let signature: string | undefined
 
       try {
         if (!keypair) {
@@ -43,12 +51,18 @@ export function useEmbeddedTransaction() {
         transaction.sign(keypair)
 
         // Send raw transaction to ephemeral rollup - skip preflight since it's gasless
-        const signature = await erConnection.sendRawTransaction(transaction.serialize(), {
+        signature = await erConnection.sendRawTransaction(transaction.serialize(), {
           skipPreflight: true,
         })
 
+        // Notify that transaction was sent
+        callbacks?.onSent?.(signature)
+
         // Confirm transaction on ephemeral rollup
         await erConnection.confirmTransaction({ signature, ...latestBlockhash }, 'confirmed')
+
+        // Notify that transaction was confirmed
+        callbacks?.onConfirmed?.(signature)
 
         setIsLoading(false)
         return signature
@@ -56,6 +70,7 @@ export function useEmbeddedTransaction() {
         const error = err as Error
         setError(error)
         setIsLoading(false)
+        callbacks?.onError?.(error, signature)
         throw error
       }
     },

@@ -4,8 +4,6 @@ import { AnimatedSprite } from '@/components/animated-sprite'
 import { InteractivePenguin } from '@/components/interactive-penguin'
 import { PixelHUD } from '@/components/pixel-hud'
 import { PixelButton } from '@/components/pixel-button'
-import { UiIconSymbol } from '@/components/ui/ui-icon-symbol'
-import { ellipsify } from '@/utils/ellipsify'
 import React, { useState, useEffect, useCallback } from 'react'
 import { View, Pressable, ActivityIndicator, StyleSheet, ImageBackground, Modal, Image, TextInput } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -63,19 +61,13 @@ function AnimatedEllipsis() {
 
 function formatLastFedShort(timestamp: number): string {
   if (timestamp === 0) return 'Never'
-  const date = new Date(timestamp * 1000)
-  const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
-  const diffMins = Math.floor(diffMs / 60000)
+
+  const diffMins = Math.floor((Date.now() - timestamp * 1000) / 60000)
 
   if (diffMins < 1) return 'Now'
   if (diffMins < 60) return `${diffMins}m`
-
-  const diffHours = Math.floor(diffMins / 60)
-  if (diffHours < 24) return `${diffHours}h`
-
-  const diffDays = Math.floor(diffHours / 24)
-  return `${diffDays}d`
+  if (diffMins < 1440) return `${Math.floor(diffMins / 60)}h`
+  return `${Math.floor(diffMins / 1440)}d`
 }
 
 type ScreenState = 'scanning' | 'loading' | 'not_initialized' | 'hatching' | 'initialized'
@@ -193,21 +185,18 @@ export default function TabTomoScreen() {
 
   const handleGetCoin = () => {
     if (!scannedUid) return
-    // Fire and forget - don't block on the transaction
+    // Fire and forget - toast handled automatically by mutation
     getCoin.mutateAsync(scannedUid).catch((err: any) => {
       console.error('Get coin error:', err)
-      Snackbar.show({ text: `Error: ${err.message}`, duration: Snackbar.LENGTH_LONG })
     })
   }
 
   const handleFeed = async () => {
     if (!scannedUid) return
     try {
-      const sig = await feed.mutateAsync(scannedUid)
-      Snackbar.show({ text: `Fed Tomo! ${ellipsify(sig, 8)}`, duration: Snackbar.LENGTH_SHORT })
+      await feed.mutateAsync(scannedUid)
     } catch (err: any) {
       console.error('Feed error:', err)
-      Snackbar.show({ text: `Error: ${err.message}`, duration: Snackbar.LENGTH_LONG })
     }
   }
 
@@ -215,11 +204,9 @@ export default function TabTomoScreen() {
     if (!scannedUid) return
     try {
       await triggerItemDrop.mutateAsync(scannedUid)
-      Snackbar.show({ text: 'Item drop triggered!', duration: Snackbar.LENGTH_SHORT })
       setShowDebugPanel(false)
     } catch (err: any) {
       console.error('Trigger item drop error:', err)
-      Snackbar.show({ text: `Error: ${err.message}`, duration: Snackbar.LENGTH_LONG })
     }
   }
 
@@ -227,10 +214,8 @@ export default function TabTomoScreen() {
     if (!scannedUid) return
     try {
       await openItemDrop.mutateAsync(scannedUid)
-      Snackbar.show({ text: 'Opened chest!', duration: Snackbar.LENGTH_SHORT })
     } catch (err: any) {
       console.error('Open item drop error:', err)
-      Snackbar.show({ text: `Error: ${err.message}`, duration: Snackbar.LENGTH_LONG })
     }
   }
 
@@ -240,10 +225,8 @@ export default function TabTomoScreen() {
     if (inventory[index] === 0) return // Empty slot
     try {
       await useItem.mutateAsync({ uid: scannedUid, index })
-      Snackbar.show({ text: 'Used item!', duration: Snackbar.LENGTH_SHORT })
     } catch (err: any) {
       console.error('Use item error:', err)
-      Snackbar.show({ text: `Error: ${err.message}`, duration: Snackbar.LENGTH_LONG })
     }
   }
 

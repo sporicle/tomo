@@ -5,6 +5,7 @@ import { AuthProvider } from '@/components/auth/auth-provider'
 import { ClusterProvider, useCluster } from '@/components/cluster/cluster-provider'
 import { EmbeddedWalletProvider } from '@/components/embedded-wallet/embedded-wallet-provider'
 import { TomoSessionProvider } from '@/components/tomo-session-provider'
+import { TransactionToastProvider } from '@/components/transaction-toast-provider'
 import { AppTheme } from '@/components/app-theme'
 
 const queryClient = new QueryClient()
@@ -16,7 +17,9 @@ export function AppProviders({ children }: PropsWithChildren) {
           <SolanaProvider>
             <EmbeddedWalletProvider>
               <TomoSessionProvider>
-                <AuthProvider>{children}</AuthProvider>
+                <AuthProvider>
+                  <TransactionToastProvider>{children}</TransactionToastProvider>
+                </AuthProvider>
               </TomoSessionProvider>
             </EmbeddedWalletProvider>
           </SolanaProvider>
