@@ -22,6 +22,7 @@ import { AnimatedSprite } from './animated-sprite'
 
 const PENGUIN_SPRITE = require('@/assets/images/penguin.png')
 const COIN_SPRITE = require('@/assets/images/coin.png')
+const ITEMS_SPRITE = require('@/assets/images/items.png')
 
 const PENGUIN_ANIMATIONS = {
   idle: { row: 0, frames: 16, fps: 4, loop: true },
@@ -44,6 +45,11 @@ const COIN_DISPLAY_SIZE = COIN_SIZE * COIN_SCALE
 const DEBUG_HITBOXES = false
 const PRESSABLE_HITSLOP = 10
 const MIN_DRAG_THRESHOLD = 30 // Must move this many pixels before drag starts
+
+// Treasure chest constants (first frame of items spritesheet)
+const CHEST_SIZE = 64
+const CHEST_SCALE = 0.75
+const CHEST_DISPLAY_SIZE = CHEST_SIZE * CHEST_SCALE
 
 interface SpinningCoinProps {
   startX: number
@@ -111,17 +117,72 @@ function SpinningCoin({ startX, startY, onComplete }: SpinningCoinProps) {
   )
 }
 
+interface TreasureChestProps {
+  x: number
+  y: number
+  onTap: () => void
+}
+
+function TreasureChest({ x, y, onTap }: TreasureChestProps) {
+  const scale = useSharedValue(1)
+
+  const handlePress = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+    // Bounce animation
+    scale.value = withSequence(
+      withTiming(1.2, { duration: 100 }),
+      withTiming(1, { duration: 100 })
+    )
+    onTap()
+  }, [onTap, scale])
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }))
+
+  return (
+    <Animated.View
+      style={[
+        {
+          position: 'absolute',
+          left: x - CHEST_DISPLAY_SIZE / 2,
+          top: y - CHEST_DISPLAY_SIZE / 2,
+          width: CHEST_DISPLAY_SIZE,
+          height: CHEST_DISPLAY_SIZE,
+          overflow: 'hidden',
+        },
+        animatedStyle,
+      ]}
+    >
+      <Pressable onPress={handlePress}>
+        <Image
+          source={ITEMS_SPRITE}
+          style={{
+            width: CHEST_SIZE * 10 * CHEST_SCALE, // 10 frames in spritesheet
+            height: CHEST_DISPLAY_SIZE,
+            marginLeft: 0, // First frame is the chest
+          }}
+        />
+      </Pressable>
+    </Animated.View>
+  )
+}
+
 interface InteractivePenguinProps {
   style?: object
   onTap?: () => void
+  itemDrop?: boolean
+  onChestTap?: () => void
 }
 
-export function InteractivePenguin({ style, onTap }: InteractivePenguinProps) {
+export function InteractivePenguin({ style, onTap, itemDrop, onChestTap }: InteractivePenguinProps) {
   const [isMoving, setIsMoving] = useState(false)
   const [facingLeft, setFacingLeft] = useState(false)
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 })
   const [coins, setCoins] = useState<{ id: number; x: number; y: number }[]>([])
   const coinIdRef = useRef(0)
+  const [chestPosition, setChestPosition] = useState<{ x: number; y: number } | null>(null)
+  const chestSpawnedForDrop = useRef(false)
 
   // Penguin position (top-left of sprite)
   const positionX = useSharedValue(0)
@@ -157,6 +218,27 @@ export function InteractivePenguin({ style, onTap }: InteractivePenguinProps) {
     spawnCoin()
     onTap?.()
   }, [spawnCoin, onTap])
+
+  // Spawn chest when itemDrop becomes true
+  useEffect(() => {
+    if (itemDrop && containerSize.width > 0 && containerSize.height > 0 && !chestSpawnedForDrop.current) {
+      // Spawn in center-ish area (random within middle 40% of screen)
+      const centerX = containerSize.width / 2
+      const centerY = containerSize.height / 2
+      const offsetX = (Math.random() - 0.5) * containerSize.width * 0.4
+      const offsetY = (Math.random() - 0.5) * containerSize.height * 0.4
+      setChestPosition({ x: centerX + offsetX, y: centerY + offsetY })
+      chestSpawnedForDrop.current = true
+    } else if (!itemDrop) {
+      // Reset when itemDrop becomes false
+      setChestPosition(null)
+      chestSpawnedForDrop.current = false
+    }
+  }, [itemDrop, containerSize])
+
+  const handleChestTap = useCallback(() => {
+    onChestTap?.()
+  }, [onChestTap])
 
   // Frame callback for consistent speed movement
   useFrameCallback((frameInfo) => {
@@ -348,6 +430,13 @@ export function InteractivePenguin({ style, onTap }: InteractivePenguinProps) {
           onComplete={() => removeCoin(coin.id)}
         />
       ))}
+      {chestPosition && (
+        <TreasureChest
+          x={chestPosition.x}
+          y={chestPosition.y}
+          onTap={handleChestTap}
+        />
+      )}
     </View>
   )
 }

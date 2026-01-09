@@ -4,9 +4,10 @@ import { AnimatedSprite } from '@/components/animated-sprite'
 import { InteractivePenguin } from '@/components/interactive-penguin'
 import { PixelHUD } from '@/components/pixel-hud'
 import { PixelButton } from '@/components/pixel-button'
+import { UiIconSymbol } from '@/components/ui/ui-icon-symbol'
 import { ellipsify } from '@/utils/ellipsify'
 import React, { useState, useEffect, useCallback } from 'react'
-import { View, Pressable, ActivityIndicator, StyleSheet, ImageBackground } from 'react-native'
+import { View, Pressable, ActivityIndicator, StyleSheet, ImageBackground, Modal, Image } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useFocusEffect } from 'expo-router'
 import NfcManager, { NfcTech } from 'react-native-nfc-manager'
@@ -17,10 +18,20 @@ import {
   useInitAndDelegate,
   useGetCoin,
   useFeed,
+  useTriggerItemDrop,
+  useOpenItemDrop,
+  useUseItem,
 } from '@/components/demo/use-tomo-program'
+import { useTomoSession } from '@/components/tomo-session-provider'
 
 const EGG_SPRITE = require('@/assets/images/egg.png')
 const BG_IMAGE = require('@/assets/images/bg.jpg')
+const ITEMS_SPRITE = require('@/assets/images/items.png')
+
+// Item sprite constants
+const ITEM_SIZE = 64
+const ITEM_SCALE = 0.7
+const ITEM_SLOT_SIZE = 48
 
 const EGG_ANIMATIONS = {
   idle: { row: 0, frames: 5, fps: 6, loop: true },
@@ -67,15 +78,23 @@ type HatchPhase = 'idle' | 'final_idle' | 'hatch'
 
 export default function TabTomoScreen() {
   const { publicKey } = useTomoProgram()
-  const [screenState, setScreenState] = useState<ScreenState>('scanning')
-  const [scannedUid, setScannedUid] = useState<string | null>(null)
+  const { scannedUid, setScannedUid, clearSession } = useTomoSession()
+  const [screenState, setScreenState] = useState<ScreenState>(() =>
+    scannedUid ? 'loading' : 'scanning'
+  )
   const [isProcessingHatch, setIsProcessingHatch] = useState(false)
   const [hatchPhase, setHatchPhase] = useState<HatchPhase>('idle')
+
+  const [showDebugPanel, setShowDebugPanel] = useState(false)
+  const [showInventory, setShowInventory] = useState(false)
 
   const tomoQuery = useTomoAccountQuery({ uid: scannedUid ?? '' })
   const initAndDelegate = useInitAndDelegate()
   const getCoin = useGetCoin()
   const feed = useFeed()
+  const triggerItemDrop = useTriggerItemDrop()
+  const openItemDrop = useOpenItemDrop()
+  const useItem = useUseItem()
 
   const tomo = tomoQuery.data
   const coins = tomo?.coins?.toNumber() ?? 0
@@ -84,7 +103,7 @@ export default function TabTomoScreen() {
   // Start NFC scanning
   const startNfcScan = useCallback(async () => {
     setScreenState('scanning')
-    setScannedUid(null)
+    clearSession()
     setHatchPhase('idle')
 
     try {
@@ -99,18 +118,32 @@ export default function TabTomoScreen() {
     } finally {
       NfcManager.cancelTechnologyRequest().catch(() => {})
     }
-  }, [])
+  }, [clearSession, setScannedUid])
 
-  // Initialize NFC manager and start scanning when tab is focused
+  // Handle logout - clear session and go to scanning
+  const handleLogout = useCallback(() => {
+    setShowDebugPanel(false)
+    clearSession()
+    setScreenState('scanning')
+    setHatchPhase('idle')
+    // Start a new NFC scan
+    NfcManager.start().catch(() => {})
+    startNfcScan()
+  }, [clearSession, startNfcScan])
+
+  // Initialize NFC manager and start scanning when tab is focused (only if no session)
   useFocusEffect(
     useCallback(() => {
       NfcManager.start().catch(() => {})
-      startNfcScan()
+      // Only start scanning if we don't have an existing session
+      if (!scannedUid) {
+        startNfcScan()
+      }
 
       return () => {
         NfcManager.cancelTechnologyRequest().catch(() => {})
       }
-    }, [startNfcScan])
+    }, [scannedUid, startNfcScan])
   )
 
   // Update screen state based on query results
@@ -173,8 +206,40 @@ export default function TabTomoScreen() {
     }
   }
 
-  const handleScanAgain = () => {
-    startNfcScan()
+  const handleTriggerItemDrop = async () => {
+    if (!scannedUid) return
+    try {
+      await triggerItemDrop.mutateAsync(scannedUid)
+      Snackbar.show({ text: 'Item drop triggered!', duration: Snackbar.LENGTH_SHORT })
+      setShowDebugPanel(false)
+    } catch (err: any) {
+      console.error('Trigger item drop error:', err)
+      Snackbar.show({ text: `Error: ${err.message}`, duration: Snackbar.LENGTH_LONG })
+    }
+  }
+
+  const handleOpenChest = async () => {
+    if (!scannedUid) return
+    try {
+      await openItemDrop.mutateAsync(scannedUid)
+      Snackbar.show({ text: 'Opened chest!', duration: Snackbar.LENGTH_SHORT })
+    } catch (err: any) {
+      console.error('Open item drop error:', err)
+      Snackbar.show({ text: `Error: ${err.message}`, duration: Snackbar.LENGTH_LONG })
+    }
+  }
+
+  const handleUseItem = async (index: number) => {
+    if (!scannedUid) return
+    const inventory = tomo?.inventory ?? []
+    if (inventory[index] === 0) return // Empty slot
+    try {
+      await useItem.mutateAsync({ uid: scannedUid, index })
+      Snackbar.show({ text: 'Used item!', duration: Snackbar.LENGTH_SHORT })
+    } catch (err: any) {
+      console.error('Use item error:', err)
+      Snackbar.show({ text: `Error: ${err.message}`, duration: Snackbar.LENGTH_LONG })
+    }
   }
 
   // Scanning state - centered "scan to play..."
@@ -268,11 +333,18 @@ export default function TabTomoScreen() {
   // Initialized state - show interactive penguin
   const hunger = tomo?.hunger ?? 0
   const lastFedTime = tomo?.lastFed?.toNumber() ?? 0
+  const inventory = tomo?.inventory ?? [0, 0, 0, 0, 0, 0, 0, 0]
+  const itemDrop = tomo?.itemDrop ?? false
 
   return (
     <ImageBackground source={BG_IMAGE} style={penguinStyles.container} resizeMode="cover">
       {/* Penguin play area */}
-      <InteractivePenguin style={penguinStyles.playArea} onTap={handleGetCoin} />
+      <InteractivePenguin
+        style={penguinStyles.playArea}
+        onTap={handleGetCoin}
+        itemDrop={itemDrop}
+        onChestTap={handleOpenChest}
+      />
 
       {/* HUD overlay */}
       <View style={penguinStyles.hudContainer} pointerEvents="box-none">
@@ -283,31 +355,117 @@ export default function TabTomoScreen() {
         />
       </View>
 
+      {/* Inventory button - below HUD on left */}
+      <SafeAreaView edges={['top']} style={penguinStyles.inventoryButtonContainer} pointerEvents="box-none">
+        <Pressable
+          onPress={() => setShowInventory(true)}
+          style={penguinStyles.inventoryButton}
+        >
+          <View style={penguinStyles.inventoryIconContainer}>
+            <Image
+              source={ITEMS_SPRITE}
+              style={{
+                width: ITEM_SIZE * 10 * 0.4,
+                height: ITEM_SIZE * 0.4,
+                marginLeft: -ITEM_SIZE * 0.4 * 2, // Show item at index 2 (third item)
+              }}
+            />
+          </View>
+        </Pressable>
+      </SafeAreaView>
+
+      {/* Settings button */}
+      <SafeAreaView edges={['top']} style={penguinStyles.settingsButtonContainer} pointerEvents="box-none">
+        <Pressable
+          onPress={() => setShowDebugPanel(true)}
+          style={penguinStyles.settingsButton}
+        >
+          <UiIconSymbol name="gearshape.fill" size={24} color="#fff" />
+        </Pressable>
+      </SafeAreaView>
+
+      {/* Debug Panel Modal */}
+      <Modal
+        visible={showDebugPanel}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDebugPanel(false)}
+      >
+        <Pressable
+          style={penguinStyles.modalOverlay}
+          onPress={() => setShowDebugPanel(false)}
+        >
+          <View style={penguinStyles.debugPanel}>
+            <AppText type="subtitle" style={penguinStyles.debugTitle}>Debug</AppText>
+            <PixelButton
+              title="Trigger Item Drop"
+              onPress={handleTriggerItemDrop}
+              variant="primary"
+              loading={triggerItemDrop.isPending}
+            />
+            <PixelButton
+              title="Log Out"
+              onPress={handleLogout}
+              variant="secondary"
+            />
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* Inventory Modal */}
+      <Modal
+        visible={showInventory}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowInventory(false)}
+      >
+        <Pressable
+          style={penguinStyles.modalOverlay}
+          onPress={() => setShowInventory(false)}
+        >
+          <View style={penguinStyles.inventoryPanel} onStartShouldSetResponder={() => true}>
+            <AppText type="subtitle" style={penguinStyles.inventoryTitle}>Inventory</AppText>
+            <View style={penguinStyles.inventoryGrid}>
+              {inventory.map((itemId, index) => (
+                <Pressable
+                  key={index}
+                  onPress={() => handleUseItem(index)}
+                  disabled={itemId === 0 || useItem.isPending}
+                  style={[
+                    penguinStyles.inventorySlot,
+                    itemId === 0 && penguinStyles.inventorySlotEmpty,
+                  ]}
+                >
+                  {itemId > 0 && (
+                    <View style={penguinStyles.inventoryItemContainer}>
+                      <Image
+                        source={ITEMS_SPRITE}
+                        style={{
+                          width: ITEM_SIZE * 10 * ITEM_SCALE,
+                          height: ITEM_SIZE * ITEM_SCALE,
+                          marginLeft: -ITEM_SIZE * ITEM_SCALE * itemId, // itemId 1-9 maps to frames 1-9
+                        }}
+                      />
+                    </View>
+                  )}
+                </Pressable>
+              ))}
+            </View>
+            <AppText style={penguinStyles.inventoryHint}>Tap an item to use it</AppText>
+          </View>
+        </Pressable>
+      </Modal>
+
       {/* Bottom action bar */}
       <SafeAreaView edges={['bottom']} style={penguinStyles.actionBar}>
         <View style={penguinStyles.actionBarInner}>
-          <View style={penguinStyles.buttonRow}>
-            <View style={penguinStyles.buttonWrapper}>
-              <PixelButton
-                title="Get Coin"
-                onPress={handleGetCoin}
-                variant="primary"
-                loading={getCoin.isPending}
-              />
-            </View>
-            <View style={penguinStyles.buttonWrapper}>
-              <PixelButton
-                title={`Feed (10)`}
-                onPress={handleFeed}
-                variant="success"
-                disabled={!canFeed}
-                loading={feed.isPending}
-              />
-            </View>
-          </View>
-          <Pressable onPress={handleScanAgain} style={penguinStyles.scanAgain}>
-            <AppText style={penguinStyles.scanAgainText}>Scan Another</AppText>
-          </Pressable>
+          <PixelButton
+            title={`Feed (10)`}
+            onPress={handleFeed}
+            variant="success"
+            disabled={!canFeed}
+            loading={feed.isPending}
+          />
         </View>
       </SafeAreaView>
     </ImageBackground>
@@ -343,20 +501,96 @@ const penguinStyles = StyleSheet.create({
     padding: 12,
     gap: 8,
   },
-  buttonRow: {
-    flexDirection: 'row',
-    gap: 12,
+  settingsButtonContainer: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
   },
-  buttonWrapper: {
+  settingsButton: {
+    padding: 12,
+    marginRight: 8,
+  },
+  modalOverlay: {
     flex: 1,
-  },
-  scanAgain: {
-    paddingVertical: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  scanAgainText: {
-    color: '#81d4fa',
-    fontFamily: 'SpaceMono',
+  debugPanel: {
+    backgroundColor: '#1a1a2e',
+    borderRadius: 12,
+    padding: 20,
+    minWidth: 250,
+    borderWidth: 3,
+    borderColor: '#4a4a6a',
+    gap: 16,
+  },
+  debugTitle: {
+    textAlign: 'center',
+    color: '#fff',
+  },
+  inventoryButtonContainer: {
+    position: 'absolute',
+    top: 85, // Below HUD
+    left: 0,
+  },
+  inventoryButton: {
+    padding: 8,
+    marginLeft: 8,
+  },
+  inventoryIconContainer: {
+    width: ITEM_SLOT_SIZE * 0.6,
+    height: ITEM_SLOT_SIZE * 0.6,
+    overflow: 'hidden',
+    backgroundColor: '#2a2a3d',
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#4a4a6a',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  inventoryPanel: {
+    backgroundColor: '#1a1a2e',
+    borderRadius: 12,
+    padding: 20,
+    borderWidth: 3,
+    borderColor: '#4a4a6a',
+    alignItems: 'center',
+  },
+  inventoryTitle: {
+    textAlign: 'center',
+    color: '#fff',
+    marginBottom: 16,
+  },
+  inventoryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    width: ITEM_SLOT_SIZE * 4 + 12 * 3, // 4 slots + 3 gaps
+    gap: 12,
+  },
+  inventorySlot: {
+    width: ITEM_SLOT_SIZE,
+    height: ITEM_SLOT_SIZE,
+    backgroundColor: '#2a2a3d',
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#5a5a7a',
+    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  inventorySlotEmpty: {
+    borderColor: '#3a3a4d',
+    backgroundColor: '#1a1a2d',
+  },
+  inventoryItemContainer: {
+    width: ITEM_SIZE * ITEM_SCALE,
+    height: ITEM_SIZE * ITEM_SCALE,
+    overflow: 'hidden',
+  },
+  inventoryHint: {
+    color: '#888',
     fontSize: 12,
+    marginTop: 16,
   },
 })

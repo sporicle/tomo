@@ -4,6 +4,7 @@ import { PropsWithChildren } from 'react'
 import { AuthProvider } from '@/components/auth/auth-provider'
 import { ClusterProvider, useCluster } from '@/components/cluster/cluster-provider'
 import { EmbeddedWalletProvider } from '@/components/embedded-wallet/embedded-wallet-provider'
+import { TomoSessionProvider } from '@/components/tomo-session-provider'
 import { AppTheme } from '@/components/app-theme'
 
 const queryClient = new QueryClient()
@@ -14,7 +15,9 @@ export function AppProviders({ children }: PropsWithChildren) {
         <ClusterProvider>
           <SolanaProvider>
             <EmbeddedWalletProvider>
-              <AuthProvider>{children}</AuthProvider>
+              <TomoSessionProvider>
+                <AuthProvider>{children}</AuthProvider>
+              </TomoSessionProvider>
             </EmbeddedWalletProvider>
           </SolanaProvider>
         </ClusterProvider>
