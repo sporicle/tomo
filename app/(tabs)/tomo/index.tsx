@@ -210,7 +210,7 @@ export default function TabTomoScreen() {
               <AnimatedSprite
                 source={EGG_SPRITE}
                 frameSize={64}
-                scale={2}
+                scale={1}
                 animation={EGG_ANIMATIONS.idle}
               />
               <ActivityIndicator size="small" />
@@ -221,7 +221,7 @@ export default function TabTomoScreen() {
                 <AnimatedSprite
                   source={EGG_SPRITE}
                   frameSize={64}
-                  scale={2}
+                  scale={1}
                   animation={EGG_ANIMATIONS.idle}
                 />
                 <AppText style={{ color: publicKey ? undefined : '#888' }}>tap to hatch</AppText>
@@ -247,7 +247,7 @@ export default function TabTomoScreen() {
             <AnimatedSprite
               source={EGG_SPRITE}
               frameSize={64}
-              scale={2}
+              scale={1}
               animation={{ ...EGG_ANIMATIONS.idle, loop: false }}
               onAnimationComplete={handleFinalIdleComplete}
             />
@@ -255,7 +255,7 @@ export default function TabTomoScreen() {
             <AnimatedSprite
               source={EGG_SPRITE}
               frameSize={64}
-              scale={2}
+              scale={1}
               animation={EGG_ANIMATIONS.hatch}
               onAnimationComplete={handleHatchComplete}
             />
