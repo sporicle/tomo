@@ -22,9 +22,9 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="demo"
+        name="debug"
         options={{
-          title: 'Demo',
+          title: 'Debug',
           tabBarIcon: ({ color }) => <UiIconSymbol size={28} name="ladybug.fill" color={color} />,
         }}
       />

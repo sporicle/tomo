@@ -1,6 +1,6 @@
 import { AppView } from '@/components/app-view'
 import { AppText } from '@/components/app-text'
-import { ActivityIndicator, TextInput, View } from 'react-native'
+import { ActivityIndicator, TextInput, View, Pressable, Linking } from 'react-native'
 import React, { useState, useEffect } from 'react'
 import { Button } from '@react-navigation/elements'
 import { useThemeColor } from '@/hooks/use-theme-color'
@@ -40,34 +40,6 @@ function formatTimestamp(timestamp: number): string {
   return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`
 }
 
-function HungerBar({ hunger }: { hunger: number }) {
-  const filledColor = hunger > 60 ? '#4CAF50' : hunger > 30 ? '#FFC107' : '#F44336'
-  const backgroundColor = useThemeColor({ light: '#e0e0e0', dark: '#444444' }, 'background')
-
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-      <View
-        style={{
-          flex: 1,
-          height: 16,
-          backgroundColor,
-          borderRadius: 8,
-          overflow: 'hidden',
-        }}
-      >
-        <View
-          style={{
-            width: `${hunger}%`,
-            height: '100%',
-            backgroundColor: filledColor,
-            borderRadius: 8,
-          }}
-        />
-      </View>
-      <AppText style={{ width: 60 }}>{hunger}/100</AppText>
-    </View>
-  )
-}
 
 function DelegationStatus({ isDelegated }: { isDelegated: boolean }) {
   return (
@@ -512,7 +484,18 @@ export function DemoFeatureTomo({ uid, setUid }: DemoFeatureTomoProps) {
           <View style={{ gap: 8 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
               <AppText style={{ color: '#888' }}>PDA:</AppText>
-              <AppText>{pda ? ellipsify(pda.toString(), 8) : '-'}</AppText>
+              <Pressable
+                onPress={() => {
+                  if (pda) {
+                    const explorerUrl = `https://explorer.solana.com/address/${pda.toString()}?cluster=custom&customUrl=${encodeURIComponent('https://devnet.magicblock.app')}`
+                    Linking.openURL(explorerUrl)
+                  }
+                }}
+              >
+                <AppText style={{ textDecorationLine: 'underline' }}>
+                  {pda ? ellipsify(pda.toString(), 8) : '-'}
+                </AppText>
+              </Pressable>
             </View>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
               <AppText style={{ color: '#888' }}>Owner:</AppText>
@@ -524,9 +507,9 @@ export function DemoFeatureTomo({ uid, setUid }: DemoFeatureTomoProps) {
             </View>
           </View>
 
-          <View style={{ gap: 4 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
             <AppText style={{ color: '#888' }}>Hunger:</AppText>
-            <HungerBar hunger={tomo.hunger} />
+            <AppText>{tomo.hunger}</AppText>
           </View>
 
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>

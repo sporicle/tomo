@@ -54,6 +54,7 @@
     "buffer": "^6.0.3",
     "expo": "~54.0.21",
     "expo-blur": "~15.0.7",
+    "expo-clipboard": "^8.0.8",
     "expo-constants": "~18.0.9",
     "expo-crypto": "^15.0.8",
     "expo-dev-client": "~6.0.20",
