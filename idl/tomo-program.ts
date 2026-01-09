@@ -14,6 +14,29 @@ export type TomoProgram = {
   },
   "instructions": [
     {
+      "name": "consumeRandomness",
+      "docs": ["VRF callback - receives randomness and adds item to inventory"],
+      "discriminator": [190, 217, 49, 162, 99, 26, 73, 234],
+      "accounts": [
+        {
+          "name": "vrfProgramIdentity",
+          "docs": ["SECURITY: Validates callback is from VRF program"],
+          "signer": true,
+          "address": "9irBy75QS2BN81FUgXuHcjqceJJRuc9oDkAe8TKVvvAw"
+        },
+        {
+          "name": "tomo",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "randomness",
+          "type": { "array": ["u8", 32] }
+        }
+      ]
+    },
+    {
       "name": "delegate",
       "docs": ["Delegate the Tomo account to the ephemeral rollup"],
       "discriminator": [90, 147, 75, 178, 85, 88, 4, 137],
@@ -90,6 +113,24 @@ export type TomoProgram = {
       ]
     },
     {
+      "name": "delete",
+      "docs": ["Delete the Tomo account, returning rent to the owner"],
+      "discriminator": [165, 204, 60, 98, 134, 15, 83, 134],
+      "accounts": [
+        {
+          "name": "tomo",
+          "writable": true
+        },
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": ["tomo"]
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "feed",
       "discriminator": [46, 213, 237, 176, 190, 113, 182, 94],
       "accounts": [
@@ -143,6 +184,56 @@ export type TomoProgram = {
       ]
     },
     {
+      "name": "openItemDrop",
+      "docs": [
+        "Open an item drop - uses VRF to add a random item (1-5) to inventory",
+        "Does nothing if inventory is full or no item drop is available"
+      ],
+      "discriminator": [219, 160, 62, 193, 70, 43, 189, 4],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "tomo",
+          "writable": true
+        },
+        {
+          "name": "oracleQueue",
+          "writable": true,
+          "address": "5hBR571xnXppuCPveTrctfTU7tJLSN94nq7kv7FRK5Tc"
+        },
+        {
+          "name": "programIdentity",
+          "pda": {
+            "seeds": [
+              { "kind": "const", "value": [105, 100, 101, 110, 116, 105, 116, 121] }
+            ]
+          }
+        },
+        {
+          "name": "vrfProgram",
+          "address": "Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz"
+        },
+        {
+          "name": "slotHashes",
+          "address": "SysvarS1otHashes111111111111111111111111111"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "clientSeed",
+          "type": "u8"
+        }
+      ]
+    },
+    {
       "name": "processUndelegation",
       "discriminator": [196, 28, 41, 206, 48, 37, 51, 167],
       "accounts": [
@@ -167,6 +258,18 @@ export type TomoProgram = {
           "type": { "vec": "bytes" }
         }
       ]
+    },
+    {
+      "name": "triggerItemDrop",
+      "docs": ["Trigger an item drop - sets item_drop to true if false"],
+      "discriminator": [179, 100, 20, 236, 108, 141, 110, 8],
+      "accounts": [
+        {
+          "name": "tomo",
+          "writable": true
+        }
+      ],
+      "args": []
     },
     {
       "name": "undelegate",
@@ -195,21 +298,24 @@ export type TomoProgram = {
       "args": []
     },
     {
-      "name": "delete",
-      "docs": ["Delete the Tomo account, returning rent to the owner"],
-      "discriminator": [165, 204, 60, 98, 134, 15, 83, 134],
+      "name": "useItem",
+      "docs": [
+        "Use an item at a specific index - removes it from inventory",
+        "Does nothing if the slot is empty (contains 0)"
+      ],
+      "discriminator": [38, 85, 191, 23, 255, 151, 204, 199],
       "accounts": [
         {
           "name": "tomo",
           "writable": true
-        },
-        {
-          "name": "owner",
-          "writable": true,
-          "signer": true
         }
       ],
-      "args": []
+      "args": [
+        {
+          "name": "index",
+          "type": "u8"
+        }
+      ]
     }
   ],
   "accounts": [
@@ -250,6 +356,14 @@ export type TomoProgram = {
           {
             "name": "coins",
             "type": "u64"
+          },
+          {
+            "name": "itemDrop",
+            "type": "bool"
+          },
+          {
+            "name": "inventory",
+            "type": { "array": ["u8", 8] }
           }
         ]
       }
@@ -267,6 +381,29 @@ export const IDL: TomoProgram = {
   },
   "instructions": [
     {
+      "name": "consumeRandomness",
+      "docs": ["VRF callback - receives randomness and adds item to inventory"],
+      "discriminator": [190, 217, 49, 162, 99, 26, 73, 234],
+      "accounts": [
+        {
+          "name": "vrfProgramIdentity",
+          "docs": ["SECURITY: Validates callback is from VRF program"],
+          "signer": true,
+          "address": "9irBy75QS2BN81FUgXuHcjqceJJRuc9oDkAe8TKVvvAw"
+        },
+        {
+          "name": "tomo",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "randomness",
+          "type": { "array": ["u8", 32] }
+        }
+      ]
+    },
+    {
       "name": "delegate",
       "docs": ["Delegate the Tomo account to the ephemeral rollup"],
       "discriminator": [90, 147, 75, 178, 85, 88, 4, 137],
@@ -343,6 +480,24 @@ export const IDL: TomoProgram = {
       ]
     },
     {
+      "name": "delete",
+      "docs": ["Delete the Tomo account, returning rent to the owner"],
+      "discriminator": [165, 204, 60, 98, 134, 15, 83, 134],
+      "accounts": [
+        {
+          "name": "tomo",
+          "writable": true
+        },
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": ["tomo"]
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "feed",
       "discriminator": [46, 213, 237, 176, 190, 113, 182, 94],
       "accounts": [
@@ -396,6 +551,56 @@ export const IDL: TomoProgram = {
       ]
     },
     {
+      "name": "openItemDrop",
+      "docs": [
+        "Open an item drop - uses VRF to add a random item (1-5) to inventory",
+        "Does nothing if inventory is full or no item drop is available"
+      ],
+      "discriminator": [219, 160, 62, 193, 70, 43, 189, 4],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "tomo",
+          "writable": true
+        },
+        {
+          "name": "oracleQueue",
+          "writable": true,
+          "address": "5hBR571xnXppuCPveTrctfTU7tJLSN94nq7kv7FRK5Tc"
+        },
+        {
+          "name": "programIdentity",
+          "pda": {
+            "seeds": [
+              { "kind": "const", "value": [105, 100, 101, 110, 116, 105, 116, 121] }
+            ]
+          }
+        },
+        {
+          "name": "vrfProgram",
+          "address": "Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz"
+        },
+        {
+          "name": "slotHashes",
+          "address": "SysvarS1otHashes111111111111111111111111111"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "clientSeed",
+          "type": "u8"
+        }
+      ]
+    },
+    {
       "name": "processUndelegation",
       "discriminator": [196, 28, 41, 206, 48, 37, 51, 167],
       "accounts": [
@@ -420,6 +625,18 @@ export const IDL: TomoProgram = {
           "type": { "vec": "bytes" }
         }
       ]
+    },
+    {
+      "name": "triggerItemDrop",
+      "docs": ["Trigger an item drop - sets item_drop to true if false"],
+      "discriminator": [179, 100, 20, 236, 108, 141, 110, 8],
+      "accounts": [
+        {
+          "name": "tomo",
+          "writable": true
+        }
+      ],
+      "args": []
     },
     {
       "name": "undelegate",
@@ -448,21 +665,24 @@ export const IDL: TomoProgram = {
       "args": []
     },
     {
-      "name": "delete",
-      "docs": ["Delete the Tomo account, returning rent to the owner"],
-      "discriminator": [165, 204, 60, 98, 134, 15, 83, 134],
+      "name": "useItem",
+      "docs": [
+        "Use an item at a specific index - removes it from inventory",
+        "Does nothing if the slot is empty (contains 0)"
+      ],
+      "discriminator": [38, 85, 191, 23, 255, 151, 204, 199],
       "accounts": [
         {
           "name": "tomo",
           "writable": true
-        },
-        {
-          "name": "owner",
-          "writable": true,
-          "signer": true
         }
       ],
-      "args": []
+      "args": [
+        {
+          "name": "index",
+          "type": "u8"
+        }
+      ]
     }
   ],
   "accounts": [
@@ -503,6 +723,14 @@ export const IDL: TomoProgram = {
           {
             "name": "coins",
             "type": "u64"
+          },
+          {
+            "name": "itemDrop",
+            "type": "bool"
+          },
+          {
+            "name": "inventory",
+            "type": { "array": ["u8", 8] }
           }
         ]
       }

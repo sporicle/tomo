@@ -8,6 +8,47 @@
   },
   "instructions": [
     {
+      "name": "consume_randomness",
+      "docs": [
+        "VRF callback - receives randomness and adds item to inventory"
+      ],
+      "discriminator": [
+        190,
+        217,
+        49,
+        162,
+        99,
+        26,
+        73,
+        234
+      ],
+      "accounts": [
+        {
+          "name": "vrf_program_identity",
+          "docs": [
+            "SECURITY: Validates callback is from VRF program"
+          ],
+          "signer": true,
+          "address": "9irBy75QS2BN81FUgXuHcjqceJJRuc9oDkAe8TKVvvAw"
+        },
+        {
+          "name": "tomo",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "randomness",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
       "name": "delegate",
       "docs": [
         "Delegate the Tomo account to the ephemeral rollup"
@@ -323,6 +364,77 @@
       ]
     },
     {
+      "name": "open_item_drop",
+      "docs": [
+        "Open an item drop - uses VRF to add a random item (1-5) to inventory",
+        "Does nothing if inventory is full or no item drop is available"
+      ],
+      "discriminator": [
+        219,
+        160,
+        62,
+        193,
+        70,
+        43,
+        189,
+        4
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "tomo",
+          "writable": true
+        },
+        {
+          "name": "oracle_queue",
+          "writable": true,
+          "address": "5hBR571xnXppuCPveTrctfTU7tJLSN94nq7kv7FRK5Tc"
+        },
+        {
+          "name": "program_identity",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  100,
+                  101,
+                  110,
+                  116,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "vrf_program",
+          "address": "Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz"
+        },
+        {
+          "name": "slot_hashes",
+          "address": "SysvarS1otHashes111111111111111111111111111"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "client_seed",
+          "type": "u8"
+        }
+      ]
+    },
+    {
       "name": "process_undelegation",
       "discriminator": [
         196,
@@ -360,6 +472,29 @@
       ]
     },
     {
+      "name": "trigger_item_drop",
+      "docs": [
+        "Trigger an item drop - sets item_drop to true if false"
+      ],
+      "discriminator": [
+        179,
+        100,
+        20,
+        236,
+        108,
+        141,
+        110,
+        8
+      ],
+      "accounts": [
+        {
+          "name": "tomo",
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "undelegate",
       "docs": [
         "Undelegate the Tomo account from the ephemeral rollup"
@@ -395,6 +530,35 @@
         }
       ],
       "args": []
+    },
+    {
+      "name": "use_item",
+      "docs": [
+        "Use an item at a specific index - removes it from inventory",
+        "Does nothing if the slot is empty (contains 0)"
+      ],
+      "discriminator": [
+        38,
+        85,
+        191,
+        23,
+        255,
+        151,
+        204,
+        199
+      ],
+      "accounts": [
+        {
+          "name": "tomo",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "index",
+          "type": "u8"
+        }
+      ]
     }
   ],
   "accounts": [
@@ -444,6 +608,19 @@
           {
             "name": "coins",
             "type": "u64"
+          },
+          {
+            "name": "item_drop",
+            "type": "bool"
+          },
+          {
+            "name": "inventory",
+            "type": {
+              "array": [
+                "u8",
+                8
+              ]
+            }
           }
         ]
       }

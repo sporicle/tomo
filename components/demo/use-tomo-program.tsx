@@ -274,3 +274,97 @@ export function useDeleteTomo() {
     },
   })
 }
+
+/**
+ * Hook to trigger an item drop using the embedded wallet.
+ * Sets item_drop to true if it's false.
+ */
+export function useTriggerItemDrop() {
+  const { programService, connection } = useTomoProgram()
+  const { publicKey: embeddedPublicKey, initialize: initializeEmbeddedWallet } = useEmbeddedWallet()
+  const { executeTransaction } = useEmbeddedTransaction()
+  const invalidate = useTomoAccountInvalidate()
+
+  return useMutation({
+    mutationKey: ['trigger-item-drop', { endpoint: connection.rpcEndpoint }],
+    mutationFn: async (uid: string) => {
+      let payer = embeddedPublicKey
+      if (!payer) {
+        const keypair = await initializeEmbeddedWallet()
+        payer = keypair.publicKey
+      }
+
+      const tx = await programService.buildTriggerItemDropTx({ payer, uid })
+      const signature = await executeTransaction(tx)
+      return signature
+    },
+    onSuccess: async (_data, uid) => {
+      await invalidate(uid)
+    },
+  })
+}
+
+/**
+ * Hook to open an item drop using the embedded wallet.
+ * Uses VRF to add a random item (1-5) to inventory.
+ * NOTE: This uses the ephemeral rollup connection for VRF.
+ */
+export function useOpenItemDrop() {
+  const { connection } = useTomoProgram()
+  const { publicKey: embeddedPublicKey, initialize: initializeEmbeddedWallet } = useEmbeddedWallet()
+  const { executeTransaction, erConnection } = useEmbeddedTransaction()
+  const invalidate = useTomoAccountInvalidate()
+
+  // Create program service with ER connection for VRF
+  const erProgramService = useMemo(() => {
+    return new TomoProgramService(erConnection)
+  }, [erConnection])
+
+  return useMutation({
+    mutationKey: ['open-item-drop', { endpoint: connection.rpcEndpoint }],
+    mutationFn: async (uid: string) => {
+      let payer = embeddedPublicKey
+      if (!payer) {
+        const keypair = await initializeEmbeddedWallet()
+        payer = keypair.publicKey
+      }
+
+      // VRF requests must go to the ephemeral rollup
+      const tx = await erProgramService.buildOpenItemDropTx({ payer, uid })
+      const signature = await executeTransaction(tx)
+      return signature
+    },
+    onSuccess: async (_data, uid) => {
+      await invalidate(uid)
+    },
+  })
+}
+
+/**
+ * Hook to use an item from inventory using the embedded wallet.
+ * Removes the item at the specified index.
+ */
+export function useUseItem() {
+  const { programService, connection } = useTomoProgram()
+  const { publicKey: embeddedPublicKey, initialize: initializeEmbeddedWallet } = useEmbeddedWallet()
+  const { executeTransaction } = useEmbeddedTransaction()
+  const invalidate = useTomoAccountInvalidate()
+
+  return useMutation({
+    mutationKey: ['use-item', { endpoint: connection.rpcEndpoint }],
+    mutationFn: async ({ uid, index }: { uid: string; index: number }) => {
+      let payer = embeddedPublicKey
+      if (!payer) {
+        const keypair = await initializeEmbeddedWallet()
+        payer = keypair.publicKey
+      }
+
+      const tx = await programService.buildUseItemTx({ payer, uid, index })
+      const signature = await executeTransaction(tx)
+      return signature
+    },
+    onSuccess: async (_data, { uid }) => {
+      await invalidate(uid)
+    },
+  })
+}

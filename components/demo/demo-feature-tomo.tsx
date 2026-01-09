@@ -18,6 +18,9 @@ import {
   useDelegate,
   useUndelegate,
   useDeleteTomo,
+  useTriggerItemDrop,
+  useOpenItemDrop,
+  useUseItem,
 } from './use-tomo-program'
 
 function formatTimestamp(timestamp: number): string {
@@ -89,6 +92,72 @@ function DelegationStatus({ isDelegated }: { isDelegated: boolean }) {
       />
       <AppText style={{ color: isDelegated ? '#1565C0' : '#E65100', fontWeight: '600' }}>
         {isDelegated ? 'Delegated to Ephemeral Rollup' : 'On Base Layer (Solana)'}
+      </AppText>
+    </View>
+  )
+}
+
+const ITEM_COLORS: { [key: number]: string } = {
+  0: '#ccc',
+  1: '#E91E63',
+  2: '#9C27B0',
+  3: '#00BCD4',
+  4: '#FFC107',
+  5: '#FF9800',
+}
+
+function InventorySlot({
+  item,
+  index,
+  onUse,
+}: {
+  item: number
+  index: number
+  onUse: (index: number) => void
+}) {
+  const isEmpty = item === 0
+  return (
+    <View
+      style={{
+        width: 40,
+        height: 40,
+        borderRadius: 8,
+        backgroundColor: isEmpty ? '#f0f0f0' : ITEM_COLORS[item] || '#888',
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#ddd',
+      }}
+    >
+      {!isEmpty && (
+        <AppText
+          style={{ color: '#fff', fontWeight: 'bold', fontSize: 12 }}
+          onPress={() => onUse(index)}
+        >
+          {item}
+        </AppText>
+      )}
+    </View>
+  )
+}
+
+function Inventory({
+  inventory,
+  onUseItem,
+}: {
+  inventory: number[]
+  onUseItem: (index: number) => void
+}) {
+  return (
+    <View style={{ gap: 4 }}>
+      <AppText style={{ color: '#888' }}>Inventory:</AppText>
+      <View style={{ flexDirection: 'row', gap: 4, flexWrap: 'wrap' }}>
+        {inventory.map((item, index) => (
+          <InventorySlot key={index} item={item} index={index} onUse={onUseItem} />
+        ))}
+      </View>
+      <AppText style={{ color: '#666', fontSize: 10 }}>
+        1=Potion, 2=Elixir, 3=Gem, 4=Key, 5=Star (tap to use)
       </AppText>
     </View>
   )
@@ -169,6 +238,9 @@ export function DemoFeatureTomo({ uid, setUid }: DemoFeatureTomoProps) {
   const delegate = useDelegate()
   const undelegate = useUndelegate()
   const deleteTomo = useDeleteTomo()
+  const triggerItemDrop = useTriggerItemDrop()
+  const openItemDrop = useOpenItemDrop()
+  const useItem = useUseItem()
 
   const tomo = tomoQuery.data
   const pda = activeUid ? getTomoPDA(activeUid) : null
@@ -180,10 +252,16 @@ export function DemoFeatureTomo({ uid, setUid }: DemoFeatureTomoProps) {
     feed.isPending ||
     delegate.isPending ||
     undelegate.isPending ||
-    deleteTomo.isPending
+    deleteTomo.isPending ||
+    triggerItemDrop.isPending ||
+    openItemDrop.isPending ||
+    useItem.isPending
   const coins = tomo?.coins?.toNumber() ?? 0
   const canFeed = coins >= 10
   const isDelegated = tomo?.isDelegated ?? false
+  const hasItemDrop = tomo?.itemDrop ?? false
+  const inventory = tomo?.inventory ?? [0, 0, 0, 0, 0, 0, 0, 0]
+  const inventoryFull = inventory.every((item) => item !== 0)
 
   const handleInit = () => {
     const uidValue = uid.trim()
@@ -292,6 +370,58 @@ export function DemoFeatureTomo({ uid, setUid }: DemoFeatureTomoProps) {
       })
       .catch((err) => {
         console.error('Delete error:', err)
+        Snackbar.show({ text: `Error: ${err.message}`, duration: Snackbar.LENGTH_LONG })
+      })
+  }
+
+  const handleTriggerItemDrop = () => {
+    if (!activeUid) return
+    triggerItemDrop
+      .mutateAsync(activeUid)
+      .then((sig) => {
+        Snackbar.show({
+          text: `Item drop triggered! ${ellipsify(sig, 8)}`,
+          duration: Snackbar.LENGTH_SHORT,
+        })
+      })
+      .catch((err) => {
+        console.error('Trigger item drop error:', err)
+        Snackbar.show({ text: `Error: ${err.message}`, duration: Snackbar.LENGTH_LONG })
+      })
+  }
+
+  const handleOpenItemDrop = () => {
+    if (!activeUid) return
+    openItemDrop
+      .mutateAsync(activeUid)
+      .then((sig) => {
+        Snackbar.show({
+          text: `Item drop opened! ${ellipsify(sig, 8)}`,
+          duration: Snackbar.LENGTH_SHORT,
+        })
+      })
+      .catch((err) => {
+        console.error('Open item drop error:', err)
+        Snackbar.show({ text: `Error: ${err.message}`, duration: Snackbar.LENGTH_LONG })
+      })
+  }
+
+  const handleUseItem = (index: number) => {
+    if (!activeUid) return
+    if (inventory[index] === 0) {
+      Snackbar.show({ text: 'Slot is empty', duration: Snackbar.LENGTH_SHORT })
+      return
+    }
+    useItem
+      .mutateAsync({ uid: activeUid, index })
+      .then((sig) => {
+        Snackbar.show({
+          text: `Used item from slot ${index}! ${ellipsify(sig, 8)}`,
+          duration: Snackbar.LENGTH_SHORT,
+        })
+      })
+      .catch((err) => {
+        console.error('Use item error:', err)
         Snackbar.show({ text: `Error: ${err.message}`, duration: Snackbar.LENGTH_LONG })
       })
   }
@@ -408,6 +538,24 @@ export function DemoFeatureTomo({ uid, setUid }: DemoFeatureTomoProps) {
             <AppText style={{ color: '#888' }}>Last Fed:</AppText>
             <AppText>{formatTimestamp(tomo.lastFed.toNumber())}</AppText>
           </View>
+
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <AppText style={{ color: '#888' }}>Item Drop:</AppText>
+            <View
+              style={{
+                paddingHorizontal: 8,
+                paddingVertical: 4,
+                borderRadius: 4,
+                backgroundColor: hasItemDrop ? '#4CAF50' : '#9E9E9E',
+              }}
+            >
+              <AppText style={{ color: '#fff', fontSize: 12, fontWeight: '600' }}>
+                {hasItemDrop ? 'Available!' : 'None'}
+              </AppText>
+            </View>
+          </View>
+
+          <Inventory inventory={inventory} onUseItem={handleUseItem} />
         </View>
       )}
 
@@ -423,7 +571,7 @@ export function DemoFeatureTomo({ uid, setUid }: DemoFeatureTomoProps) {
           }}
         >
           <AppText style={{ textAlign: 'center', color: '#888' }}>
-            No Tomo found for UID "{activeUid}". Click Initialize to create one.
+            No Tomo found for UID &quot;{activeUid}&quot;. Click Initialize to create one.
           </AppText>
         </View>
       )}
@@ -452,6 +600,40 @@ export function DemoFeatureTomo({ uid, setUid }: DemoFeatureTomoProps) {
               </>
             )}
           </View>
+
+          <View style={{ marginTop: 8 }}>
+            <AppText type="defaultSemiBold">Item Drops</AppText>
+            <AppText style={{ color: '#666', fontSize: 12 }}>
+              {isDelegated ? 'Open uses VRF on Ephemeral Rollup' : 'Delegate first for VRF'}
+            </AppText>
+          </View>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            {isLoading ? (
+              <ActivityIndicator style={{ flex: 1 }} />
+            ) : (
+              <>
+                <View style={{ flex: 1 }}>
+                  <Button onPress={handleTriggerItemDrop} disabled={hasItemDrop} variant="tinted">
+                    Trigger Drop
+                  </Button>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Button
+                    onPress={handleOpenItemDrop}
+                    disabled={!hasItemDrop || !isDelegated || inventoryFull}
+                    variant="filled"
+                  >
+                    Open Drop
+                  </Button>
+                </View>
+              </>
+            )}
+          </View>
+          {inventoryFull && hasItemDrop && (
+            <AppText style={{ color: '#FF9800', fontSize: 12 }}>
+              Inventory full! Use an item first.
+            </AppText>
+          )}
 
           <View style={{ marginTop: 8 }}>
             <AppText type="defaultSemiBold">Delegation</AppText>
@@ -512,7 +694,10 @@ export function DemoFeatureTomo({ uid, setUid }: DemoFeatureTomoProps) {
         feed.isError ||
         delegate.isError ||
         undelegate.isError ||
-        deleteTomo.isError) && (
+        deleteTomo.isError ||
+        triggerItemDrop.isError ||
+        openItemDrop.isError ||
+        useItem.isError) && (
         <AppText style={{ color: '#F44336', fontSize: 12, marginTop: 8 }}>
           {initTomo.error?.message ||
             initAndDelegate.error?.message ||
@@ -520,7 +705,10 @@ export function DemoFeatureTomo({ uid, setUid }: DemoFeatureTomoProps) {
             feed.error?.message ||
             delegate.error?.message ||
             undelegate.error?.message ||
-            deleteTomo.error?.message}
+            deleteTomo.error?.message ||
+            triggerItemDrop.error?.message ||
+            openItemDrop.error?.message ||
+            useItem.error?.message}
         </AppText>
       )}
     </AppView>

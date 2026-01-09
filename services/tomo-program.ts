@@ -14,6 +14,8 @@ export interface TomoAccount {
   hunger: number
   lastFed: BN
   coins: BN
+  itemDrop: boolean
+  inventory: number[]
 }
 
 export interface TomoAccountWithDelegation extends TomoAccount {
@@ -255,8 +257,85 @@ export class TomoProgramService {
   }
 
   /**
+   * Build triggerItemDrop transaction
+   * Sets item_drop to true if it's false
+   */
+  async buildTriggerItemDropTx(params: {
+    payer: PublicKey
+    uid: string
+  }): Promise<Transaction> {
+    const [tomoPDA] = this.getTomoPDA(params.uid)
+
+    const instruction = await this.program.methods
+      .triggerItemDrop()
+      .accounts({
+        tomo: tomoPDA,
+      })
+      .instruction()
+
+    const tx = new Transaction()
+    tx.add(instruction)
+    tx.feePayer = params.payer
+
+    return tx
+  }
+
+  /**
+   * Build openItemDrop transaction
+   * Uses VRF to add a random item (1-5) to inventory
+   * NOTE: This transaction should be sent to the EPHEMERAL ROLLUP
+   */
+  async buildOpenItemDropTx(params: {
+    payer: PublicKey
+    uid: string
+    clientSeed?: number
+  }): Promise<Transaction> {
+    const [tomoPDA] = this.getTomoPDA(params.uid)
+    const clientSeed = params.clientSeed ?? Math.floor(Math.random() * 256)
+
+    const instruction = await this.program.methods
+      .openItemDrop(clientSeed)
+      .accounts({
+        payer: params.payer,
+        tomo: tomoPDA,
+      })
+      .instruction()
+
+    const tx = new Transaction()
+    tx.add(instruction)
+    tx.feePayer = params.payer
+
+    return tx
+  }
+
+  /**
+   * Build useItem transaction
+   * Removes an item from the specified inventory slot
+   */
+  async buildUseItemTx(params: {
+    payer: PublicKey
+    uid: string
+    index: number
+  }): Promise<Transaction> {
+    const [tomoPDA] = this.getTomoPDA(params.uid)
+
+    const instruction = await this.program.methods
+      .useItem(params.index)
+      .accounts({
+        tomo: tomoPDA,
+      })
+      .instruction()
+
+    const tx = new Transaction()
+    tx.add(instruction)
+    tx.feePayer = params.payer
+
+    return tx
+  }
+
+  /**
    * Manually decode Tomo account data
-   * Structure: discriminator (8) + owner (32) + uid string (4 + len) + hunger (1) + last_fed (8) + coins (8)
+   * Structure: discriminator (8) + owner (32) + uid string (4 + len) + hunger (1) + last_fed (8) + coins (8) + item_drop (1) + inventory (8)
    */
   private decodeTomoAccount(data: Uint8Array): TomoAccount {
     let offset = 8 // Skip discriminator
@@ -289,6 +368,17 @@ export class TomoProgramService {
     for (let i = 0; i < 8; i++) {
       coins |= BigInt(data[offset + i]) << BigInt(i * 8)
     }
+    offset += 8
+
+    // Item drop: bool (1 byte)
+    const itemDrop = data[offset] !== 0
+    offset += 1
+
+    // Inventory: [u8; 8]
+    const inventory: number[] = []
+    for (let i = 0; i < 8; i++) {
+      inventory.push(data[offset + i])
+    }
 
     return {
       owner,
@@ -296,6 +386,8 @@ export class TomoProgramService {
       hunger,
       lastFed: new BN(lastFed.toString()),
       coins: new BN(coins.toString()),
+      itemDrop,
+      inventory,
     }
   }
 
