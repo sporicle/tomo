@@ -21,6 +21,7 @@ import {
   useUseItem,
 } from '@/components/demo/use-tomo-program'
 import { useTomoSession } from '@/components/tomo-session-provider'
+import { getWalletErrorMessage } from '@/utils/wallet-errors'
 
 const EGG_SPRITE = require('@/assets/images/egg.png')
 const BG_IMAGE = require('@/assets/images/bg.jpg')
@@ -167,8 +168,11 @@ export default function TabTomoScreen() {
       setScreenState('hatching')
       setHatchPhase('final_idle')
     } catch (err: any) {
-      console.error('Hatch error:', err)
-      Snackbar.show({ text: `Error: ${err.message}`, duration: Snackbar.LENGTH_LONG })
+      const errorMessage = getWalletErrorMessage(err)
+      if (errorMessage) {
+        console.error('Hatch error:', err)
+        Snackbar.show({ text: errorMessage, duration: Snackbar.LENGTH_LONG })
+      }
       setIsProcessingHatch(false)
     }
   }
@@ -187,7 +191,11 @@ export default function TabTomoScreen() {
     if (!scannedUid) return
     // Fire and forget - toast handled automatically by mutation
     getCoin.mutateAsync(scannedUid).catch((err: any) => {
-      console.error('Get coin error:', err)
+      const errorMessage = getWalletErrorMessage(err)
+      if (errorMessage) {
+        console.error('Get coin error:', err)
+        Snackbar.show({ text: errorMessage, duration: Snackbar.LENGTH_SHORT })
+      }
     })
   }
 
@@ -196,7 +204,11 @@ export default function TabTomoScreen() {
     try {
       await feed.mutateAsync(scannedUid)
     } catch (err: any) {
-      console.error('Feed error:', err)
+      const errorMessage = getWalletErrorMessage(err)
+      if (errorMessage) {
+        console.error('Feed error:', err)
+        Snackbar.show({ text: errorMessage, duration: Snackbar.LENGTH_SHORT })
+      }
     }
   }
 
@@ -206,7 +218,11 @@ export default function TabTomoScreen() {
       await triggerItemDrop.mutateAsync(scannedUid)
       setShowDebugPanel(false)
     } catch (err: any) {
-      console.error('Trigger item drop error:', err)
+      const errorMessage = getWalletErrorMessage(err)
+      if (errorMessage) {
+        console.error('Trigger item drop error:', err)
+        Snackbar.show({ text: errorMessage, duration: Snackbar.LENGTH_SHORT })
+      }
     }
   }
 
@@ -215,7 +231,11 @@ export default function TabTomoScreen() {
     try {
       await openItemDrop.mutateAsync(scannedUid)
     } catch (err: any) {
-      console.error('Open item drop error:', err)
+      const errorMessage = getWalletErrorMessage(err)
+      if (errorMessage) {
+        console.error('Open item drop error:', err)
+        Snackbar.show({ text: errorMessage, duration: Snackbar.LENGTH_SHORT })
+      }
     }
   }
 
@@ -226,7 +246,11 @@ export default function TabTomoScreen() {
     try {
       await useItem.mutateAsync({ uid: scannedUid, index })
     } catch (err: any) {
-      console.error('Use item error:', err)
+      const errorMessage = getWalletErrorMessage(err)
+      if (errorMessage) {
+        console.error('Use item error:', err)
+        Snackbar.show({ text: errorMessage, duration: Snackbar.LENGTH_SHORT })
+      }
     }
   }
 
